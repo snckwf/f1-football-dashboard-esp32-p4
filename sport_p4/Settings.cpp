@@ -1,4 +1,4 @@
-#include "Impostazioni.h"
+#include "Settings.h"
 
 #include <Preferences.h>
 #include "AppConfig.h"
@@ -30,10 +30,10 @@ void impostazioniCarica()
         g_imp.compAttive   = p.getUChar("comp", g_imp.compAttive);
         p.end();
     }
-    if ((g_imp.compAttive & 0x3F) == 0) g_imp.compAttive = 0x3F;   /* almeno una */
+    if ((g_imp.compAttive & 0x3F) == 0) g_imp.compAttive = 0x3F;   /* at least one */
     if (g_imp.volume > 100) g_imp.volume = 100;
     if (g_imp.luminosita < 5 || g_imp.luminosita > 100) g_imp.luminosita = 100;
-    Serial.printf("[IMPOSTAZIONI] volume %u, luce %u%%, standby %u min, suoni %d, comp 0x%02X\n",
+    Serial.printf("[SETTINGS] volume %u, brightness %u%%, standby %u min, sounds %d, comp 0x%02X\n",
                   g_imp.volume, g_imp.luminosita, g_imp.standbyMin, g_imp.suoni, g_imp.compAttive);
 }
 

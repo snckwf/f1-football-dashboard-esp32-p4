@@ -1,47 +1,47 @@
 /* ============================================================================
- *  Audio - jingle chiptune sullo speaker della scheda (codec ES8311)
+ *  Audio - chiptune jingles on the board speaker (ES8311 codec)
  *
- *  Onde quadre con duty cycle variabile, come i canali pulse del NES.
- *  Nessun file audio: tutto sintetizzato, poche centinaia di byte di tabelle.
+ *  Square waves with variable duty cycle, like the NES pulse channels.
+ *  No audio files: everything synthesised, a few hundred bytes of tables.
  * ========================================================================== */
 #pragma once
 
 #include <Arduino.h>
 
 enum SoundEvent : uint8_t {
-    SND_TOUCH = 0,     /* blip secco a ogni tocco                            */
-    SND_MINER_DOWN,    /* discesa "power down": un miner non risponde piu'   */
-    SND_TEMP_ALARM,    /* sirena a due toni: temperatura critica             */
-    SND_BEST_SHARE,    /* arpeggio ascendente: nuovo record di best share    */
-    SND_BLOCK_FOUND,   /* fanfara di vittoria: blocco trovato                */
-    SND_STARTUP,       /* accordo breve all'avvio, conferma che l'audio va   */
+    SND_TOUCH = 0,     /* short blip at every touch                          */
+    SND_MINER_DOWN,    /* "power down" descent: a miner no longer answers    */
+    SND_TEMP_ALARM,    /* two-tone siren: critical temperature               */
+    SND_BEST_SHARE,    /* rising arpeggio: new best share record             */
+    SND_BLOCK_FOUND,   /* victory fanfare: block found                       */
+    SND_STARTUP,       /* short chord at startup, confirms the audio works   */
 
-    /* ---- suoni sintetizzati in tempo reale (sport_p4) ---- */
-    SND_F1_PASSAGGIO,        /* rombo di una monoposto che passa (effetto Doppler) */
-    SND_F1_PARTENZA,         /* 5 luci, spegnimento, motore che sale di giri       */
-    SND_FISCHIO_INIZIO,      /* fischio lungo dell'arbitro                         */
-    SND_FISCHIO_INTERVALLO,  /* due fischi                                         */
-    SND_FISCHIO_FINE,        /* tre fischi: corto, corto, lungo                    */
-    SND_GOL,                 /* sirena da stadio + boato della folla               */
-    SND_ESPULSIONE,          /* fischio deciso + tre note discendenti (rosso)      */
+    /* ---- sounds synthesised in real time (sport_p4) ---- */
+    SND_F1_PASSAGGIO,        /* roar of a passing car (Doppler effect)             */
+    SND_F1_PARTENZA,         /* 5 lights, lights out, engine revving up            */
+    SND_FISCHIO_INIZIO,      /* long referee whistle                               */
+    SND_FISCHIO_INTERVALLO,  /* two whistles                                       */
+    SND_FISCHIO_FINE,        /* three whistles: short, short, long                 */
+    SND_GOL,                 /* stadium horn + crowd roar                          */
+    SND_ESPULSIONE,          /* sharp whistle + three falling notes (red card)     */
     SND_COUNT
 };
 
-/* i suoni da qui in poi non sono jingle a note ma generatori procedurali */
+/* the sounds from here on are not note jingles but procedural generators */
 static constexpr uint8_t SND_PRIMO_SINTETIZZATO = SND_F1_PASSAGGIO;
 
-/* Inizializza codec e I2S. Ritorna false se il codec non risponde:
- * in quel caso audioPlay() diventa una no-op e il resto continua a funzionare. */
+/* Initialises codec and I2S. Returns false if the codec does not answer:
+ * in that case audioPlay() becomes a no-op and the rest keeps working.        */
 bool audioBegin();
 
-/* Non bloccante: accoda il jingle e torna subito. Chiamabile da qualsiasi task. */
+/* Non-blocking: queues the jingle and returns at once. Callable from any task. */
 void audioPlay(SoundEvent event);
 
 bool audioReady();
 
-/* 0..100. Agisce sul registro di volume del DAC. */
+/* 0..100. Acts on the DAC volume register. */
 void audioSetVolume(uint8_t percent);
 uint8_t audioGetVolume();
 
-/* Diagnostica leggibile, da stampare su seriale */
+/* Readable diagnostics, to print on the serial port */
 const char *audioStatus();

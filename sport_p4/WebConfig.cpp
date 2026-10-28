@@ -1,14 +1,14 @@
 /* ============================================================================
- *  WebConfig - pagina di configurazione su http://<ip>/ e http://sport-p4.local
+ *  WebConfig - configuration page on http://<ip>/ and http://sport-p4.local
  *
- *    GET  /             pagina
- *    GET  /api/stato    impostazioni + stato della scheda (JSON)
- *    POST /api/imposta  chiave=valore&...  (salva=1 per scrivere in NVS)
+ *    GET  /             page
+ *    GET  /api/stato    settings + board status (JSON)
+ *    POST /api/imposta  key=value&...  (salva=1 to write to NVS)
  *    POST /api/prova    s=gol|rosso|inizio|intervallo|fine|passaggio|partenza|tutti
- *    POST /api/riavvia
+ *    POST /api/riavvia  (reboot)
  *
- *  Gli slider mandano i valori mentre li muovi (salva=0, effetto immediato)
- *  e li salvano quando li rilasci (salva=1): niente scritture continue in NVS.
+ *  The sliders send the values while you move them (salva=0, immediate effect)
+ *  and save them when you release them (salva=1): no continuous NVS writes.
  * ========================================================================== */
 #include <ESPmDNS.h>
 #include <WebServer.h>
@@ -18,14 +18,14 @@
 #include "Audio.h"
 #include "BoardLvgl.h"
 #include "DataModel.h"
-#include "Impostazioni.h"
+#include "Settings.h"
 #include "Notify.h"
 #include "esp_heap_caps.h"
 
 static WebServer s_server(80);
 
 static const char PAGINA[] PROGMEM = R"HTML(<!doctype html>
-<html lang="it"><head><meta charset="utf-8">
+<html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Sport P4</title>
 <style>
@@ -53,54 +53,54 @@ button:hover{border-color:var(--acc)}.btns{display:flex;flex-wrap:wrap;gap:8px}
 dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 16px;margin:0}dt{color:var(--mut)}dd{margin:0}
 #msg{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:var(--acc);color:#fff;padding:8px 14px;border-radius:8px;opacity:0;transition:.3s}
 </style></head><body><main>
-<h1>Sport P4</h1><p class="sub">Formula 1 e calcio sul display ESP32-P4 &mdash; impostazioni</p>
+<h1>Sport P4</h1><p class="sub">Formula 1 and football on the ESP32-P4 display &mdash; settings</p>
 
-<section><h2>Schermo e audio</h2>
+<section><h2>Screen and audio</h2>
 <div class="riga"><span>Volume</span><span class="val" id="v_volume"></span></div>
 <input type="range" id="volume" min="0" max="100" step="1">
-<div class="riga"><span>Luminosit&agrave;</span><span class="val" id="v_luce"></span></div>
+<div class="riga"><span>Brightness</span><span class="val" id="v_luce"></span></div>
 <input type="range" id="luce" min="5" max="100" step="1">
-<div class="riga"><span>Standby dello schermo</span>
-<select id="standby"><option value="0">mai</option><option value="1">1 minuto</option><option value="2">2 minuti</option>
-<option value="5">5 minuti</option><option value="10">10 minuti</option><option value="30">30 minuti</option></select></div>
+<div class="riga"><span>Screen standby</span>
+<select id="standby"><option value="0">never</option><option value="1">1 minute</option><option value="2">2 minutes</option>
+<option value="5">5 minutes</option><option value="10">10 minutes</option><option value="30">30 minutes</option></select></div>
 </section>
 
-<section><h2>Avvisi</h2>
-<div class="riga"><span>Suoni degli avvisi</span><label class="sw"><input type="checkbox" id="suoni"><span></span></label></div>
-<div class="riga"><span>Avvisi calcio (gol, fischi)</span><label class="sw"><input type="checkbox" id="avvCalcio"><span></span></label></div>
-<div class="riga"><span>Avvisi cartellini rossi</span><label class="sw"><input type="checkbox" id="avvRossi"><span></span></label></div>
-<div class="riga"><span>Avvisi Formula 1</span><label class="sw"><input type="checkbox" id="avvF1"><span></span></label></div>
+<section><h2>Alerts</h2>
+<div class="riga"><span>Alert sounds</span><label class="sw"><input type="checkbox" id="suoni"><span></span></label></div>
+<div class="riga"><span>Football alerts (goals, whistles)</span><label class="sw"><input type="checkbox" id="avvCalcio"><span></span></label></div>
+<div class="riga"><span>Red card alerts</span><label class="sw"><input type="checkbox" id="avvRossi"><span></span></label></div>
+<div class="riga"><span>Formula 1 alerts</span><label class="sw"><input type="checkbox" id="avvF1"><span></span></label></div>
 </section>
 
-<section><h2>Competizioni mostrate</h2><div class="grid" id="comp"></div></section>
+<section><h2>Competitions shown</h2><div class="grid" id="comp"></div></section>
 
-<section><h2>Prova suoni</h2><div class="btns">
-<button data-s="gol">Gol</button><button data-s="rosso">Espulsione</button><button data-s="inizio">Fischio d'inizio</button>
-<button data-s="intervallo">Intervallo</button><button data-s="fine">Fine partita</button>
-<button data-s="partenza">Partenza F1</button><button data-s="passaggio">Passaggio F1</button><button data-s="tutti">Tutti</button>
+<section><h2>Sound test</h2><div class="btns">
+<button data-s="gol">Goal</button><button data-s="rosso">Red card</button><button data-s="inizio">Kick-off whistle</button>
+<button data-s="intervallo">Half time</button><button data-s="fine">Full time</button>
+<button data-s="partenza">F1 start</button><button data-s="passaggio">F1 pass-by</button><button data-s="tutti">All</button>
 </div></section>
 
-<section><h2>Stato</h2><dl id="info"></dl>
-<div class="btns" style="margin-top:12px"><button id="riavvia">Riavvia la scheda</button></div></section>
+<section><h2>Status</h2><dl id="info"></dl>
+<div class="btns" style="margin-top:12px"><button id="riavvia">Reboot the board</button></div></section>
 </main><div id="msg"></div>
 <script>
 const $=id=>document.getElementById(id);
-const COMP=["Serie A","Nations League","Champions League","Europa League","Europei","Mondiali"];
+const COMP=["Serie A","Nations League","Champions League","Europa League","Euros","World Cup"];
 let comp=63;
 function msg(t){const m=$("msg");m.textContent=t;m.style.opacity=1;clearTimeout(m._t);m._t=setTimeout(()=>m.style.opacity=0,1500)}
 function invia(o,salva){const b=new URLSearchParams(o);b.set("salva",salva?1:0);
- return fetch("/api/imposta",{method:"POST",body:b}).then(r=>{if(salva)msg(r.ok?"Salvato":"Errore")})}
+ return fetch("/api/imposta",{method:"POST",body:b}).then(r=>{if(salva)msg(r.ok?"Saved":"Error")})}
 function slider(id,key,suff){const s=$(id),v=$("v_"+id);
  s.oninput=()=>{v.textContent=s.value+suff;invia({[key]:s.value},0)};
  s.onchange=()=>invia({[key]:s.value},1)}
 slider("volume","volume","");slider("luce","luce","%");
 $("standby").onchange=e=>invia({standby:e.target.value},1);
 for(const k of ["suoni","avvCalcio","avvRossi","avvF1"])$(k).onchange=e=>invia({[k]:e.target.checked?1:0},1);
-document.querySelectorAll("[data-s]").forEach(b=>b.onclick=()=>fetch("/api/prova",{method:"POST",body:new URLSearchParams({s:b.dataset.s})}).then(()=>msg("Suono inviato")));
-$("riavvia").onclick=()=>{if(confirm("Riavviare la scheda?"))fetch("/api/riavvia",{method:"POST"}).then(()=>msg("Riavvio..."))};
+document.querySelectorAll("[data-s]").forEach(b=>b.onclick=()=>fetch("/api/prova",{method:"POST",body:new URLSearchParams({s:b.dataset.s})}).then(()=>msg("Sound sent")));
+$("riavvia").onclick=()=>{if(confirm("Reboot the board?"))fetch("/api/riavvia",{method:"POST"}).then(()=>msg("Rebooting..."))};
 function disegnaComp(){const g=$("comp");g.innerHTML="";COMP.forEach((n,i)=>{const l=document.createElement("label");
  const c=document.createElement("input");c.type="checkbox";c.checked=!!(comp&(1<<i));
- c.onchange=()=>{let nv=c.checked?comp|(1<<i):comp&~(1<<i);if(!nv){c.checked=true;msg("Almeno una");return}comp=nv;invia({comp:comp},1)};
+ c.onchange=()=>{let nv=c.checked?comp|(1<<i):comp&~(1<<i);if(!nv){c.checked=true;msg("At least one");return}comp=nv;invia({comp:comp},1)};
  l.append(c,document.createTextNode(n));g.append(l)})}
 function stato(primo){fetch("/api/stato").then(r=>r.json()).then(j=>{
  if(primo){$("volume").value=j.volume;$("v_volume").textContent=j.volume;$("luce").value=j.luce;$("v_luce").textContent=j.luce+"%";
@@ -123,7 +123,7 @@ static void inviaStato()
     uint8_t live = 0;
     if (dataLock(200)) {
         const F1Live &L = *g_f1live;
-        if (L.meeting[0]) snprintf(f1, sizeof(f1), "%s - %s (%s)%s", L.meeting, L.sessione, L.stato, L.connesso ? ", collegato" : "");
+        if (L.meeting[0]) snprintf(f1, sizeof(f1), "%s - %s (%s)%s", L.meeting, L.sessione, L.stato, L.connesso ? ", connected" : "");
         for (uint8_t c = 0; c < CALCIO_COMP_COUNT; ++c) live += g_comp[c].live;
         dataUnlock();
     }
@@ -132,12 +132,12 @@ static void inviaStato()
     char out[900];
     snprintf(out, sizeof(out),
              "{\"volume\":%u,\"luce\":%u,\"standby\":%u,\"suoni\":%s,\"avvCalcio\":%s,\"avvRossi\":%s,\"avvF1\":%s,\"comp\":%u,"
-             "\"info\":{\"Indirizzo\":\"%s  (sport-p4.local)\",\"Acceso da\":\"%lu h %02lu min\",\"Schermo\":\"%s\","
-             "\"RAM interna libera\":\"%u KB\",\"PSRAM libera\":\"%u KB\",\"Partite in corso\":\"%u\",\"F1\":\"%s\"}}",
+             "\"info\":{\"Address\":\"%s  (sport-p4.local)\",\"Up for\":\"%lu h %02lu min\",\"Screen\":\"%s\","
+             "\"Free internal RAM\":\"%u KB\",\"Free PSRAM\":\"%u KB\",\"Matches in progress\":\"%u\",\"F1\":\"%s\"}}",
              I.volume, I.luminosita, I.standbyMin, I.suoni ? "true" : "false", I.avvisiCalcio ? "true" : "false",
              I.avvisiRossi ? "true" : "false", I.avvisiF1 ? "true" : "false", I.compAttive,
              WiFi.localIP().toString().c_str(), (unsigned long)(s / 3600), (unsigned long)((s / 60) % 60),
-             boardIsScreenOn() ? "acceso" : "standby",
+             boardIsScreenOn() ? "on" : "standby",
              (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
              (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024), live, f1);
     s_server.sendHeader("Cache-Control", "no-store");
@@ -169,7 +169,7 @@ static void imposta()
     }
     if (s_server.arg("salva") == "1") {
         impostazioniSalva();
-        Serial.println("[WEB] impostazioni salvate");
+        Serial.println("[WEB] settings saved");
     }
     s_server.send(200, "text/plain", "ok");
 }
@@ -191,7 +191,7 @@ static void prova()
 static void webTask(void *arg)
 {
     (void)arg;
-    /* aspetta il Wi-Fi */
+    /* wait for the Wi-Fi */
     while (WiFi.status() != WL_CONNECTED) vTaskDelay(pdMS_TO_TICKS(1000));
 
     s_server.on("/", HTTP_GET, []() { s_server.send_P(200, "text/html; charset=utf-8", PAGINA); });
@@ -203,10 +203,10 @@ static void webTask(void *arg)
         delay(500);
         ESP.restart();
     });
-    s_server.onNotFound([]() { s_server.send(404, "text/plain", "non trovato"); });
+    s_server.onNotFound([]() { s_server.send(404, "text/plain", "not found"); });
     s_server.begin();
     if (MDNS.begin("sport-p4")) MDNS.addService("http", "tcp", 80);
-    Serial.printf("[WEB] configurazione su http://%s/  (http://sport-p4.local/)\n", WiFi.localIP().toString().c_str());
+    Serial.printf("[WEB] configuration on http://%s/  (http://sport-p4.local/)\n", WiFi.localIP().toString().c_str());
 
     while (true) {
         s_server.handleClient();

@@ -27,15 +27,15 @@ static void    *g_drawBuf2 = nullptr;
 static char     g_touchStatus[72] = "Touch: NO";
 static uint32_t g_lastActivityMs = 0;
 static bool     g_screenOn = true;
-/* regolabili dalla pagina web (sport_p4) */
+/* adjustable from the web page (sport_p4) */
 static volatile uint8_t  g_luminosita = 100;
 static volatile uint32_t g_timeoutMs  = SCREEN_TIMEOUT_MS;
 
 static uint32_t lvTickMillis() { return millis(); }
 
-/* Il pannello e' montato capovolto: ruotiamo l'intero frame prima di mandarlo
- * al controller. E' una copia lineare invertita, costa poco e non richiede la
- * rotazione software di LVGL (che invece trasformerebbe anche il touch). */
+/* The panel is mounted upside down: we rotate the whole frame before sending it
+ * to the controller. It is a reversed linear copy, cheap, and it does not need
+ * LVGL software rotation (which would also transform the touch). */
 static void rotateFullFrame180(const uint8_t *src, uint8_t *dst)
 {
     const uint16_t *src16 = reinterpret_cast<const uint16_t *>(src);
@@ -99,7 +99,7 @@ static IRAM_ATTR bool lcdRefreshFinishCb(void *userData)
     return needYield == pdTRUE;
 }
 
-/* true finche' il dito resta giu': serve a suonare il beep una volta sola */
+/* true while the finger stays down: used to play the beep only once */
 static bool g_fingerDown = false;
 
 static void lvTouchReadCb(lv_indev_t *indev, lv_indev_data_t *data)
@@ -123,7 +123,7 @@ static void lvTouchReadCb(lv_indev_t *indev, lv_indev_data_t *data)
     x = constrain(x, 0, SCREEN_WIDTH  - 1);
     y = constrain(y, 0, SCREEN_HEIGHT - 1);
 
-    /* Primo tocco a schermo spento: serve solo a risvegliare, non naviga */
+    /* First touch with the screen off: it only wakes up, it does not navigate */
     if (!g_screenOn) {
         setScreenOn(true);
         g_lastActivityMs = millis();
@@ -135,7 +135,7 @@ static void lvTouchReadCb(lv_indev_t *indev, lv_indev_data_t *data)
     data->point.x = (int16_t)x;
     data->point.y = (int16_t)y;
 
-    /* beep solo sul fronte di discesa del dito, non per tutta la pressione */
+    /* beep only on the finger's falling edge, not for the whole press */
     if (AUDIO_TOUCH_BEEP && !g_fingerDown) audioPlay(SND_TOUCH);
     g_fingerDown = true;
 
@@ -191,7 +191,7 @@ static bool initLcd()
     if (g_lcd == nullptr) return false;
 
     if (!g_lcd->configFrameBufferNumber(2)) {
-        Serial.println("Doppio framebuffer non disponibile: uso i buffer LVGL");
+        Serial.println("Double framebuffer not available: using the LVGL buffers");
     }
     if (!g_lcd->begin()) {
         Serial.println("LCD begin failed");
@@ -229,21 +229,21 @@ static bool beginTouchAtAddress(uint8_t address)
     touch->configInterruptActiveLevel(0);
 
     if (!touch->begin()) {
-        Serial.printf("GT911 begin fallito a 0x%02X\n", address);
+        Serial.printf("GT911 begin failed at 0x%02X\n", address);
         snprintf(g_touchStatus, sizeof(g_touchStatus), "Touch: fail 0x%02X", address);
         delete touch;
         delete bus;
         return false;
     }
 
-    /* Le trasformazioni le applichiamo noi nella read callback, non qui */
+    /* We apply the transformations ourselves in the read callback, not here */
     touch->swapXY(false);
     touch->mirrorX(false);
     touch->mirrorY(false);
 
     g_touchBus = bus;
     g_touch = touch;
-    Serial.printf("GT911 pronto a 0x%02X\n", address);
+    Serial.printf("GT911 ready at 0x%02X\n", address);
     snprintf(g_touchStatus, sizeof(g_touchStatus), "Touch OK 0x%02X", address);
     return true;
 }
@@ -252,7 +252,7 @@ static bool initTouch()
 {
     if (beginTouchAtAddress(ESP_LCD_TOUCH_IO_I2C_GT911_ADDRESS)) return true;
     if (beginTouchAtAddress(ESP_LCD_TOUCH_IO_I2C_GT911_ADDRESS_BACKUP)) return true;
-    Serial.println("GT911 non trovato: proseguo senza touch");
+    Serial.println("GT911 not found: continuing without touch");
     snprintf(g_touchStatus, sizeof(g_touchStatus), "Touch: NO");
     g_touch = nullptr;
     g_touchBus = nullptr;
@@ -293,13 +293,13 @@ bool initBoardLvgl()
 
     g_drawBuf1 = allocLvglBuffer(frameBytes);
     if (g_drawBuf1 == nullptr) {
-        Serial.println("Allocazione buffer LVGL fallita");
+        Serial.println("LVGL buffer allocation failed");
         return false;
     }
     if (DISPLAY_ROTATE_180 && !g_useDisplayFrameBuffers) {
         g_drawBuf2 = allocLvglBuffer(frameBytes);
         if (g_drawBuf2 == nullptr) {
-            Serial.println("Allocazione buffer di rotazione fallita");
+            Serial.println("Rotation buffer allocation failed");
             return false;
         }
     }
@@ -315,7 +315,7 @@ bool initBoardLvgl()
     g_lvglReady = true;
     g_lastActivityMs = millis();
     if (xTaskCreatePinnedToCore(lvglTask, "lvgl", 8192, nullptr, 3, &g_lvglTask, ARDUINO_RUNNING_CORE) != pdPASS) {
-        Serial.println("Creazione task LVGL fallita");
+        Serial.println("LVGL task creation failed");
         return false;
     }
     if (g_useDisplayFrameBuffers) {
@@ -347,7 +347,7 @@ void boardResetScreenTimeout()
     if (!g_screenOn) setScreenOn(true);
 }
 
-/* chiamare con il lock di LVGL preso (oppure dal task LVGL) */
+/* call with the LVGL lock taken (or from the LVGL task) */
 void boardSetBrightness(uint8_t percent)
 {
     if (percent < 5) percent = 5;

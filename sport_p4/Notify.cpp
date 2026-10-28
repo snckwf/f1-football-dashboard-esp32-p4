@@ -3,7 +3,7 @@
 #include <Preferences.h>
 #include <stdarg.h>
 #include "AppConfig.h"
-#include "Impostazioni.h"
+#include "Settings.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
@@ -16,10 +16,10 @@ static constexpr uint8_t CODA = 8;
 static Notifica          g_coda[CODA];
 static uint8_t           g_testa = 0;
 static uint8_t           g_conta = 0;
-static uint32_t          g_inizioMs = 0;   /* quando e' stata mostrata quella in testa */
+static uint32_t          g_inizioMs = 0;   /* when the one at the head was shown */
 static SemaphoreHandle_t g_mutex = nullptr;
 
-/* le impostazioni (suoni, avvisi calcio/F1) stanno in Impostazioni.cpp */
+/* the settings (sounds, football/F1 alerts) live in Settings.cpp */
 void notifyInit()
 {
     if (g_mutex == nullptr) g_mutex = xSemaphoreCreateMutex();
@@ -33,11 +33,11 @@ void notifySetSuoni(bool on)
 
 bool notifySuoni() { return imp().suoni; }
 
-/* schermata del prossimo avviso: impostata dai client subito prima di notifica() */
+/* screen of the next alert: set by the clients right before notifica() */
 static volatile uint8_t g_prossModo = 255;
 static volatile uint8_t g_prossSub  = 0;
 
-/* risveglio dallo standby: scritto dai task di rete, letto dal task LVGL */
+/* wake-up from standby: written by the network tasks, read by the LVGL task */
 static volatile bool    g_sveglia = false;
 static volatile uint8_t g_svModo  = 255;
 static volatile uint8_t g_svSub   = 0;
@@ -78,15 +78,15 @@ void notifica(NotificaTipo tipo, SoundEvent suono, const char *fmt, ...)
     const uint8_t modo = g_prossModo;
     const uint8_t sub  = g_prossSub;
     g_prossModo = 255;
-    /* avvisi disattivati dalla pagina web: niente banner, suono ne' risveglio */
+    /* alerts disabled from the web page: no banner, sound or wake-up */
     if ((modo == 1 && !imp().avvisiCalcio) || (modo == 0 && !imp().avvisiF1)) {
-        Serial.printf("[AVVISO disattivato] %s\n", buf);
+        Serial.printf("[ALERT disabled] %s\n", buf);
         return;
     }
-    Serial.printf("[AVVISO] %s\n", buf);
+    Serial.printf("[ALERT] %s\n", buf);
 
     if (g_mutex != nullptr && xSemaphoreTake(g_mutex, pdMS_TO_TICKS(200)) == pdTRUE) {
-        if (g_conta == CODA) {          /* coda piena: scarta la piu' vecchia */
+        if (g_conta == CODA) {          /* queue full: drop the oldest */
             g_testa = (g_testa + 1) % CODA;
             g_conta--;
             g_inizioMs = millis();
@@ -108,7 +108,7 @@ bool notificaCorrente(char *testo, size_t n, NotificaTipo *tipo)
 {
     bool ok = false;
     if (g_mutex == nullptr || xSemaphoreTake(g_mutex, pdMS_TO_TICKS(20)) != pdTRUE) return false;
-    /* con altre notifiche in coda ognuna resta a schermo meno a lungo */
+    /* with other notifications queued each one stays on screen for less time */
     const uint32_t durata = g_conta > 1 ? NOTIFICA_DURATA_MS / 2 : NOTIFICA_DURATA_MS;
     while (g_conta > 0 && millis() - g_inizioMs >= durata) {
         g_testa = (g_testa + 1) % CODA;

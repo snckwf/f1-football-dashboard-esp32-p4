@@ -1,10 +1,10 @@
 /* ============================================================================
- *  F1Client - Jolpica (https://api.jolpi.ca/ergast/f1/), nessuna chiave API
+ *  F1Client - Jolpica (https://api.jolpi.ca/ergast/f1/), no API key
  *
- *  Classifica piloti, classifica costruttori, risultato dell'ultima gara e
- *  calendario del prossimo GP (serve anche al task live per sapere quando
- *  collegarsi). Limite di Jolpica: poche richieste al secondo, quindi le
- *  quattro chiamate sono distanziate.
+ *  Drivers' standings, constructors' standings, result of the last race and
+ *  calendar of the next GP (also used by the live task to know when to
+ *  connect). Jolpica limit: few requests per second, so the
+ *  four calls are spaced out.
  * ========================================================================== */
 #include <ArduinoJson.h>
 #include "PsramJson.h"
@@ -17,7 +17,7 @@
 
 static const char BASE[] = "https://api.jolpi.ca/ergast/f1/current/";
 
-static F1Dati *s_nuovo = nullptr;   /* copia di lavoro in PSRAM */
+static F1Dati *s_nuovo = nullptr;   /* working copy in PSRAM */
 
 static bool scarica(const char *percorso, JsonDocument &doc, JsonDocument *filtro)
 {
@@ -43,7 +43,7 @@ static void copia(char *dst, size_t n, const char *src)
 }
 
 /* ---------------------------------------------------------------------------
- *  Classifica piloti
+ *  Drivers' standings
  * ------------------------------------------------------------------------- */
 static bool leggiPiloti(F1Dati &d)
 {
@@ -70,7 +70,7 @@ static bool leggiPiloti(F1Dati &d)
 }
 
 /* ---------------------------------------------------------------------------
- *  Classifica costruttori
+ *  Constructors' standings
  * ------------------------------------------------------------------------- */
 static bool leggiTeam(F1Dati &d)
 {
@@ -93,7 +93,7 @@ static bool leggiTeam(F1Dati &d)
 }
 
 /* ---------------------------------------------------------------------------
- *  Ultima gara
+ *  Last race
  * ------------------------------------------------------------------------- */
 static void traduciStato(const char *st, char *out, size_t n)
 {
@@ -101,14 +101,14 @@ static void traduciStato(const char *st, char *out, size_t n)
     if (strncmp(st, "+", 1) == 0) {
         /* "+1 Lap", "+2 Laps" */
         const int giri = atoi(st + 1);
-        snprintf(out, n, "+%d %s", giri, giri == 1 ? "giro" : "giri");
+        snprintf(out, n, "+%d %s", giri, giri == 1 ? "lap" : "laps");
         return;
     }
-    if (strstr(st, "Lapped"))                   { snprintf(out, n, "doppiato"); return; }
-    if (strstr(st, "Disqualified"))             { snprintf(out, n, "Squalificato"); return; }
-    if (strstr(st, "Did not start") || strstr(st, "Withdrew")) { snprintf(out, n, "Non partito"); return; }
-    if (strstr(st, "Finished"))                 { snprintf(out, n, "Arrivato"); return; }
-    snprintf(out, n, "Rit. %s", st);
+    if (strstr(st, "Lapped"))                   { snprintf(out, n, "lapped"); return; }
+    if (strstr(st, "Disqualified"))             { snprintf(out, n, "Disqualified"); return; }
+    if (strstr(st, "Did not start") || strstr(st, "Withdrew")) { snprintf(out, n, "Did not start"); return; }
+    if (strstr(st, "Finished"))                 { snprintf(out, n, "Finished"); return; }
+    snprintf(out, n, "Ret. %s", st);
 }
 
 static bool leggiUltimaGara(F1Dati &d)
@@ -147,7 +147,7 @@ static bool leggiUltimaGara(F1Dati &d)
 }
 
 /* ---------------------------------------------------------------------------
- *  Prossimo GP e orari delle sessioni
+ *  Next GP and session times
  * ------------------------------------------------------------------------- */
 static void aggiungiSessione(F1Dati &d, const char *nome, JsonObject s)
 {
@@ -169,7 +169,7 @@ static bool leggiProssimo(F1Dati &d)
     d.prossimoNome[0] = 0;
     d.prossimoLuogo[0] = 0;
     JsonObject g = doc["MRData"]["RaceTable"]["Races"][0];
-    if (g.isNull()) return true;   /* stagione finita: nessun GP in programma */
+    if (g.isNull()) return true;   /* season over: no GP scheduled */
 
     char nome[64];
     copia(nome, sizeof(nome), g["raceName"] | "");
@@ -184,12 +184,12 @@ static bool leggiProssimo(F1Dati &d)
     snprintf(luogo, sizeof(luogo), "%s, %s", loc, paese);
     snprintf(d.prossimoLuogo, sizeof(d.prossimoLuogo), "%s", luogo);
 
-    aggiungiSessione(d, "Libere 1",    g["FirstPractice"]);
-    aggiungiSessione(d, "Libere 2",    g["SecondPractice"]);
-    aggiungiSessione(d, "Libere 3",    g["ThirdPractice"]);
+    aggiungiSessione(d, "Practice 1",  g["FirstPractice"]);
+    aggiungiSessione(d, "Practice 2",  g["SecondPractice"]);
+    aggiungiSessione(d, "Practice 3",  g["ThirdPractice"]);
     aggiungiSessione(d, "Sprint Q.",   g["SprintQualifying"].isNull() ? g["SprintShootout"] : g["SprintQualifying"]);
     aggiungiSessione(d, "Sprint",      g["Sprint"]);
-    aggiungiSessione(d, "Qualifiche",  g["Qualifying"]);
+    aggiungiSessione(d, "Qualifying",  g["Qualifying"]);
     JsonObject gara = g;
     if (d.nSessioni < 6) {
         char iso[32];
@@ -197,11 +197,11 @@ static bool leggiProssimo(F1Dati &d)
         const time_t t = parseIsoUtc(iso);
         if (t != 0) {
             F1Sessione &x = d.sessioni[d.nSessioni++];
-            snprintf(x.nome, sizeof(x.nome), "GARA");
+            snprintf(x.nome, sizeof(x.nome), "RACE");
             x.inizio = t;
         }
     }
-    /* in ordine cronologico (lo sprint weekend mescola l'ordine) */
+    /* in chronological order (the sprint weekend mixes up the order) */
     for (uint8_t i = 1; i < d.nSessioni; ++i) {
         F1Sessione x = d.sessioni[i];
         int j = i - 1;
@@ -212,7 +212,7 @@ static bool leggiProssimo(F1Dati &d)
 }
 
 /* ---------------------------------------------------------------------------
- *  Giro completo
+ *  Full cycle
  * ------------------------------------------------------------------------- */
 static bool pollF1Once()
 {
@@ -234,14 +234,14 @@ static bool pollF1Once()
         memcpy(g_f1, s_nuovo, sizeof(F1Dati));
         dataUnlock();
     }
-    Serial.printf("[F1] Jolpica %s: %u piloti, %u team, ultima gara %s, prossimo %s\n",
-                  ok ? "ok" : "parziale", s_nuovo->nPiloti, s_nuovo->nTeam,
+    Serial.printf("[F1] Jolpica %s: %u drivers, %u teams, last race %s, next %s\n",
+                  ok ? "ok" : "partial", s_nuovo->nPiloti, s_nuovo->nTeam,
                   s_nuovo->garaNome, s_nuovo->prossimoNome);
     return ok;
 }
 
-/* true se una gara o sprint e' finita da meno di 4 ore: i risultati ufficiali
- * arrivano su Jolpica con qualche decina di minuti di ritardo */
+/* true if a race or sprint finished less than 4 hours ago: the official results
+ * reach Jolpica a few tens of minutes late */
 static bool garaAppenaFinita()
 {
     bool si = false;
@@ -249,7 +249,7 @@ static bool garaAppenaFinita()
     if (dataLock(200)) {
         for (uint8_t i = 0; i < g_f1->nSessioni; ++i) {
             const F1Sessione &s = g_f1->sessioni[i];
-            if ((strcmp(s.nome, "GARA") == 0 || strcmp(s.nome, "Sprint") == 0) &&
+            if ((strcmp(s.nome, "RACE") == 0 || strcmp(s.nome, "Sprint") == 0) &&
                 ora > s.inizio + 3600 && ora < s.inizio + 6 * 3600) si = true;
         }
         dataUnlock();
@@ -268,7 +268,7 @@ void f1Task(void *arg)
     while (true) {
         if (!reteOk()) { vTaskDelay(pdMS_TO_TICKS(2000)); continue; }
         uint32_t periodo = F1_JOLPICA_MS;
-        if (!ultimoOk) periodo = 120000;                       /* errore: riprova fra 2 min */
+        if (!ultimoOk) periodo = 120000;                       /* error: retry in 2 min */
         else if (garaAppenaFinita()) periodo = F1_JOLPICA_POSTGARA_MS;
         if (ultimo == 0 || millis() - ultimo >= periodo) {
             ultimoOk = pollF1Once();

@@ -1,119 +1,119 @@
-# Dashboard Formula 1 e calcio in tempo reale su ESP32-P4 7″
+# Real-time Formula 1 and football dashboard on ESP32-P4 7″
 
-> 📖 **Articolo completo con foto, spiegazioni e problemi risolti:**
-> **[www.emgi.it – Dashboard Formula 1 e calcio in tempo reale su ESP32-P4 7″ con case stampato in 3D](https://www.emgi.it/2026/10/04/dashboard-formula-1-calcio-tempo-reale-esp32-p4-case-3d/)**
+> 📖 **Full article with photos, explanations and solved problems (in Italian):**
+> **[www.emgi.it – Real-time Formula 1 and football dashboard on ESP32-P4 7″ with 3D-printed case](https://www.emgi.it/2026/10/04/dashboard-formula-1-calcio-tempo-reale-esp32-p4-case-3d/)**
 >
-> Altri progetti di elettronica, Arduino, ESP32 e stampa 3D su **[www.emgi.it](https://www.emgi.it)**
+> More electronics, Arduino, ESP32, Home Assistant and 3D printing projects at **[www.emgi.it](https://www.emgi.it)**
 
-![Dashboard F1 e calcio](immagini/copertina-3d.jpg)
+![F1 and football dashboard](images/cover-3d.jpg)
 
-Display da scrivania che mostra **Formula 1 e calcio in tempo reale**, senza app, account o chiavi API, con **avvisi sonori** per gol, cambi di leader, Safety Car e bandiere. Firmware Arduino con LVGL 9, case stampato in 3D con supporto da tavolo e vano per lo speaker.
+Desk display showing **Formula 1 and football in real time**, with no app, account or API key, and **sound alerts** for goals, leader changes, Safety Car and flags. Arduino firmware with LVGL 9, 3D-printed case with desk stand and speaker bay.
 
-![Display nel case](immagini/dashboard-f1-calcio-esp32-p4-case-3d.jpg)
+![Display in the case](images/dashboard-f1-football-esp32-p4-case-3d.jpg)
 
-## Funzionalità
+## Features
 
 **Formula 1**
-- Live timing di prove, qualifiche e gara: posizioni, distacchi, intervalli, pit stop, ritiri, giro, bandiere, SC/VSC, messaggi della direzione gara
-- Frecce di sorpasso (posizioni guadagnate/perse)
-- Classifica piloti, costruttori e risultato dell'ultima gara
-- Mappa del circuito (sagoma ufficiale MultiViewer) con la **posizione stimata** delle monoposto; tocca un pilota nell'elenco per mostrarlo o nasconderlo (pulsanti TUTTI / NESSUNO, scelta salvata)
-- Gomme di ogni pilota con colori ufficiali e giri percorsi
+- Live timing of practice, qualifying and race: positions, gaps, intervals, pit stops, retirements, lap, flags, SC/VSC, race control messages
+- Overtaking arrows (positions gained/lost)
+- Drivers' and constructors' standings and result of the last race
+- Circuit map (official MultiViewer outline) with the **estimated position** of the cars; tap a driver in the list to show or hide it (ALL / NONE buttons, choice saved)
+- Tyres of every driver with official colours and laps covered
 
-**Calcio**
-- Serie A (con classifica), Nations League, Champions League, Europa League, Europei, Mondiali
-- Partite da 2 giorni prima a 7 giorni dopo, aggiornamento ogni 60 s (20 s con partite in corso)
-- Dettaglio partita: cronaca, statistiche, formazioni; indicatore espulsioni
+**Football**
+- Serie A (with standings), Nations League, Champions League, Europa League, Euros, World Cup
+- Matches from 2 days before to 7 days after, updated every 60 s (20 s with matches in progress)
+- Match detail: timeline, statistics, line-ups; sent-off indicator
 
-**Avvisi sonori** sintetizzati dal firmware (nessun file audio): gol, fischi, cartellini rossi, partenza F1, nuovo leader, Safety Car/VSC/bandiera rossa, bandiera a scacchi.
+**Sound alerts** synthesised by the firmware (no audio files): goals, whistles, red cards, F1 start, new leader, Safety Car/VSC/red flag, chequered flag.
 
-**Altro:** standby dopo 2 minuti con risveglio al tocco o all'avviso, pagina web di configurazione (salvata in NVS), API HTTP per Home Assistant.
+**Other:** standby after 2 minutes with wake-up on touch or on an alert, configuration web page (saved in NVS), HTTP API for Home Assistant.
 
 ## Hardware
 
-| Componente | Note |
+| Component | Notes |
 |---|---|
-| Waveshare **ESP32-P4-WIFI6-Touch-LCD-7B** | 7″ 1024×600 MIPI-DSI, touch GT911, ESP32-P4 + ESP32-C6 (WiFi 6), codec ES8311 |
-| Altoparlante | quello in dotazione con la scheda |
-| Alimentatore 5 V USB-C | |
-| Viti piccole | per chiudere cornice e corpo |
+| Waveshare **ESP32-P4-WIFI6-Touch-LCD-7B** | 7″ 1024×600 MIPI-DSI, GT911 touch, ESP32-P4 + ESP32-C6 (WiFi 6), ES8311 codec |
+| Speaker | the one supplied with the board |
+| 5 V USB-C power supply | |
+| Small screws | to close bezel and body |
 
-## Fonti dati (tutte pubbliche, senza registrazione)
+## Data sources (all public, no registration)
 
-| Dato | Fonte |
+| Data | Source |
 |---|---|
-| Partite, risultati, classifica Serie A, dettaglio partita | ESPN (`site.api.espn.com`) |
-| Classifiche F1, ultima gara, calendario | Jolpica (`api.jolpi.ca`) |
-| Live timing F1, gomme, passaggi sul traguardo | `livetiming.formula1.com` (SignalR su WebSocket) |
-| Sagoma dei circuiti | MultiViewer (`api.multiviewer.app`), scaricata una volta e salvata in NVS |
+| Matches, results, Serie A standings, match detail | ESPN (`site.api.espn.com`) |
+| F1 standings, last race, calendar | Jolpica (`api.jolpi.ca`) |
+| F1 live timing, tyres, finish-line crossings | `livetiming.formula1.com` (SignalR over WebSocket) |
+| Circuit outlines | MultiViewer (`api.multiviewer.app`), downloaded once and saved in NVS |
 
-> Le coordinate GPS delle monoposto (`Position.z`) il live timing le invia solo agli abbonati F1 TV: la posizione sulla mappa è quindi stimata dall'ultimo passaggio sul traguardo e dall'ultimo tempo sul giro di ogni pilota.
+> The live timing sends the GPS coordinates of the cars (`Position.z`) only to F1 TV subscribers: the position on the map is therefore estimated from each driver's last crossing of the finish line and last lap time.
 
 ## Arduino IDE
 
-- **Core esp32 Espressif 3.3.x** (testato con 3.3.12). ⚠️ Non usare il core 4.0 (alpha): `ESP32_Display_Panel` 1.0.4 non compila con ESP-IDF 6.
-- **Librerie:** ESP32_Display_Panel, ESP32_IO_Expander, esp-lib-utils, lvgl 9.x, ArduinoJson 7.x
+- **Espressif esp32 core 3.3.x** (tested with 3.3.12). ⚠️ Do not use core 4.0 (alpha): `ESP32_Display_Panel` 1.0.4 does not compile with ESP-IDF 6.
+- **Libraries:** ESP32_Display_Panel, ESP32_IO_Expander, esp-lib-utils, lvgl 9.x, ArduinoJson 7.x
 
-| Impostazione | Valore |
+| Setting | Value |
 |---|---|
-| Scheda | ESP32P4 Dev Module |
+| Board | ESP32P4 Dev Module |
 | Chip Variant | Before v3.00 |
 | PSRAM | Enabled |
 | Flash Size | 16MB (128Mb) |
 | Partition Scheme | 16M Flash (3MB APP/9.9MB FATFS) |
 | USB Mode | Hardware CDC and JTAG |
 
-La prima compilazione richiede circa 15 minuti.
+The first build takes about 15 minutes.
 
-## Installazione
+## Installation
 
-1. Clona o scarica il repository e apri `sport_p4/sport_p4.ino`.
-2. In **`sport_p4/AppConfig.h`** inserisci SSID e password della tua rete WiFi (`LA_TUA_RETE` / `LA_TUA_PASSWORD`). È l'unico file da modificare.
-3. Compila e carica via USB-C.
-4. Apri `http://sport-p4.local` (oppure l'IP mostrato sul monitor seriale) per la configurazione.
+1. Clone or download the repository and open `sport_p4/sport_p4.ino`.
+2. In **`sport_p4/AppConfig.h`** enter the SSID and password of your WiFi network (`YOUR_NETWORK` / `YOUR_PASSWORD`). It is the only file to edit.
+3. Build and upload over USB-C.
+4. Open `http://sport-p4.local` (or the IP shown on the serial monitor) for the configuration.
 
-**API HTTP:** `GET /api/stato` · `POST /api/imposta` (es. `luce=40`) · `POST /api/prova?s=gol`
+**HTTP API:** `GET /api/stato` (status) · `POST /api/imposta` (settings, e.g. `luce=40` for brightness) · `POST /api/prova?s=gol` (sound test)
 
-**Comandi seriale (115200 baud):** `d` prova suoni · `m` avvisi on/off · `g` simula gol · `f` simula avviso F1
+**Serial commands (115200 baud):** `d` sound test · `m` alerts on/off · `g` simulate a goal · `f` simulate an F1 alert
 
-## Collegamenti elettrici
+## Wiring
 
-La scheda **Waveshare ESP32-P4-WIFI6-Touch-LCD-7B** integra già display, touch, WiFi (ESP32-C6) e codec audio: non ci sono fili da saldare.
+The **Waveshare ESP32-P4-WIFI6-Touch-LCD-7B** board already integrates display, touch, WiFi (ESP32-C6) and audio codec: there are no wires to solder.
 
-| Collegamento | Dove |
+| Connection | Where |
 |---|---|
-| Altoparlante (in dotazione) | connettore **SPK / speaker** della scheda (uscita del codec ES8311) |
-| Alimentazione e programmazione | porta **USB-C** della scheda, alimentatore **5 V** (almeno 2 A) |
+| Speaker (supplied) | the board's **SPK / speaker** connector (ES8311 codec output) |
+| Power and programming | the board's **USB-C** port, **5 V** power supply (at least 2 A) |
 
-- Collega lo speaker **prima** di chiudere il case: il cavetto passa dal corpo al vano del supporto.
-- Per caricare lo sketch usa un cavo USB-C dati (non solo ricarica).
+- Connect the speaker **before** closing the case: the cable runs from the body to the stand's bay.
+- To upload the sketch use a USB-C data cable (not charge-only).
 
-## Case stampato in 3D
+## 3D-printed case
 
-File STL nella cartella [`case_3d`](case_3d):
+STL files in the [`case_3d`](case_3d) folder:
 
-| Pezzo | Dimensioni | File |
+| Part | Dimensions | File |
 |---|---|---|
-| Cornice | 174 × 109 × 5,4 mm | `case_esp32_p4_cornice.stl` |
-| Corpo | 174 × 109 × 17,5 mm | `case_esp32_p4_corpo.stl` |
-| Supporto (leggio con vano speaker) | 120 × 73 × 93 mm | `case_esp32_p4_supporto.stl` |
-| Tappo vano speaker | 112 × 15,5 × 3 mm | `case_esp32_p4_tappo.stl` |
+| Bezel | 174 × 109 × 5.4 mm | `case_esp32_p4_bezel.stl` |
+| Body | 174 × 109 × 17.5 mm | `case_esp32_p4_body.stl` |
+| Stand (easel with speaker bay) | 120 × 73 × 93 mm | `case_esp32_p4_stand.stl` |
+| Speaker bay cap | 112 × 15.5 × 3 mm | `case_esp32_p4_cap.stl` |
 
-**Stampa:** PLA, 205 °C / piatto 60 °C, layer 0,2 mm, 3 perimetri, riempimento 20%. Cornice e corpo con la faccia piana sul piatto; supporto sulla base (verifica nello slicer se il ripiano del vano speaker richiede supporti).
+**Printing:** PLA, 205 °C / bed 60 °C, 0.2 mm layers, 3 perimeters, 20% infill. Bezel and body with the flat face on the bed; stand on its base (check in the slicer whether the shelf of the speaker bay needs supports).
 
 <p>
-<img src="immagini/corpo-case-esp32-p4.jpg" width="32%">
-<img src="immagini/supporto-esp32-p4-vano-speaker.jpg" width="32%">
-<img src="immagini/case-esp32-p4-retro-griglia-speaker.jpg" width="32%">
+<img src="images/case-esp32-p4-body.jpg" width="32%">
+<img src="images/stand-esp32-p4-speaker-bay.jpg" width="32%">
+<img src="images/case-esp32-p4-back-speaker-grille.jpg" width="32%">
 </p>
 
-**Montaggio:** carica lo sketch, collega lo speaker, chiudi la scheda tra cornice e corpo con le viti, inserisci lo speaker nel supporto e chiudi con il tappo.
+**Assembly:** upload the sketch, connect the speaker, close the board between bezel and body with the screws, put the speaker in the stand and close it with the cap.
 
-## Licenza
+## License
 
-- Codice: [MIT](LICENSE)
-- Modelli 3D e immagini: [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.it)
+- Code: [MIT](LICENSE)
+- 3D models and images: [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
 
 ---
 
-**Autore:** Massimiliano Sandrin – **[eMGi.it](https://www.emgi.it)** · Domande e commenti sotto l'[articolo sul sito](https://www.emgi.it/2026/10/04/dashboard-formula-1-calcio-tempo-reale-esp32-p4-case-3d/).
+**Author:** Massimiliano Sandrin – **[eMGi.it](https://www.emgi.it)** · Questions and comments below the [article on the website](https://www.emgi.it/2026/10/04/dashboard-formula-1-calcio-tempo-reale-esp32-p4-case-3d/).

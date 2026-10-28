@@ -1,8 +1,8 @@
 /* ============================================================================
- *  UiF1 - LIVE, PILOTI, COSTRUTTORI, ULTIMA GARA
+ *  UiF1 - LIVE, DRIVERS, CONSTRUCTORS, LAST RACE
  *
- *  Tutte le righe sono create una volta sola all'avvio e poi riempite:
- *  nessun oggetto LVGL viene ricreato durante il funzionamento.
+ *  All rows are created only once at startup and then filled:
+ *  no LVGL object is recreated while running.
  * ========================================================================== */
 #include "Ui.h"
 #include "BoardLvgl.h"
@@ -24,7 +24,7 @@ lv_color_t uiColoreGomma(char g)
 /* ===========================================================================
  *  LIVE
  * ========================================================================= */
-#define LIVE_RIGHE      12          /* per colonna: 24 piloti al massimo */
+#define LIVE_RIGHE      12          /* per column: 24 drivers at most */
 #define LIVE_RIGA_H     30
 #define LIVE_GRIGLIA_Y  86
 
@@ -44,7 +44,7 @@ static lv_obj_t *s_liveVuoto  = nullptr;
 static lv_obj_t *s_intest[2][2] = { { nullptr } };
 static uint32_t  s_liveVer = 0xFFFFFFFF;
 
-/* copia locale per non tenere il lock durante il disegno */
+/* local copy so the lock is not held while drawing */
 static F1Live *s_L = nullptr;
 static F1Dati *s_D = nullptr;
 
@@ -57,7 +57,7 @@ static void creaLive(lv_obj_t *pg)
     s_chipGiro = uiCol(card, 650, 4, 120, &lv_font_montserrat_22, C_TEXT, LV_TEXT_ALIGN_RIGHT);
 
     s_chipPista = uiBox(card, 780, 2, 100, 48, C_GREEN);
-    s_lblPista = uiLabel(s_chipPista, "VERDE", &lv_font_montserrat_18, C_DARK);
+    s_lblPista = uiLabel(s_chipPista, "GREEN", &lv_font_montserrat_18, C_DARK);
     lv_obj_center(s_lblPista);
 
     s_chipStato = uiBox(card, 888, 2, 102, 48, C_CARD2);
@@ -93,12 +93,12 @@ static void testoPista(uint8_t s, const char **txt, lv_color_t *bg, lv_color_t *
 {
     *fg = C_DARK;
     switch (s) {
-        case 2: *txt = "GIALLA"; *bg = C_GOLD;  break;
+        case 2: *txt = "YELLOW"; *bg = C_GOLD;  break;
         case 4: *txt = "SC";     *bg = C_GOLD;  break;
-        case 5: *txt = "ROSSA";  *bg = C_F1RED; *fg = C_TEXT; break;
+        case 5: *txt = "RED";    *bg = C_F1RED; *fg = C_TEXT; break;
         case 6: *txt = "VSC";    *bg = C_GOLD;  break;
-        case 7: *txt = "FINE VSC"; *bg = C_YELLOW; break;
-        case 1: *txt = "VERDE";  *bg = C_GREEN; break;
+        case 7: *txt = "VSC END"; *bg = C_YELLOW; break;
+        case 1: *txt = "GREEN";  *bg = C_GREEN; break;
         default: *txt = "--";    *bg = C_CARD2; *fg = C_MUTED; break;
     }
 }
@@ -107,15 +107,15 @@ static void testoStato(const char *st, bool connesso, const char **txt, lv_color
 {
     if (!connesso)                              { *txt = "OFFLINE"; *bg = C_CARD2; return; }
     if (strcmp(st, "Started") == 0)             { *txt = "LIVE";    *bg = C_F1RED; return; }
-    if (strcmp(st, "Aborted") == 0)             { *txt = "SOSPESA"; *bg = C_F1RED; return; }
+    if (strcmp(st, "Aborted") == 0)             { *txt = "STOPPED"; *bg = C_F1RED; return; }
     if (strcmp(st, "Finished") == 0 ||
         strcmp(st, "Finalised") == 0 ||
-        strcmp(st, "Ends") == 0)                { *txt = "FINITA";  *bg = C_CARD2; return; }
-    if (strcmp(st, "Inactive") == 0)            { *txt = "IN ATTESA"; *bg = C_CARD2; return; }
+        strcmp(st, "Ends") == 0)                { *txt = "FINISHED"; *bg = C_CARD2; return; }
+    if (strcmp(st, "Inactive") == 0)            { *txt = "WAITING"; *bg = C_CARD2; return; }
     *txt = "--"; *bg = C_CARD2;
 }
 
-/* prossima sessione dal calendario Jolpica */
+/* next session from the Jolpica calendar */
 static bool prossimaSessione(const F1Dati &d, char *out, size_t n)
 {
     const time_t ora = time(nullptr);
@@ -124,7 +124,7 @@ static bool prossimaSessione(const F1Dati &d, char *out, size_t n)
             char g[16], h[8];
             fmtGiorno(d.sessioni[i].inizio, g, sizeof(g));
             fmtOra(d.sessioni[i].inizio, h, sizeof(h));
-            snprintf(out, n, "Prossima: %s - %s %s %s", d.prossimoNome, d.sessioni[i].nome, g, h);
+            snprintf(out, n, "Next: %s - %s %s %s", d.prossimoNome, d.sessioni[i].nome, g, h);
             return true;
         }
     }
@@ -142,7 +142,7 @@ static void aggiornaLive(bool forza)
     }
     dataUnlock();
 
-    /* le frecce dei sorpassi scadono da sole: ridisegna se ce n'e' qualcuna */
+    /* the overtaking arrows expire by themselves: redraw if there is any */
     bool frecce = false;
     for (uint8_t i = 0; i < s_L->n; ++i) {
         if (s_L->p[i].deltaMs != 0 && millis() - s_L->p[i].deltaMs < F1_DELTA_POS_MS + 2000) frecce = true;
@@ -153,7 +153,7 @@ static void aggiornaLive(bool forza)
     const bool gara = strcmp(L.tipo, "Race") == 0;
     char buf[128];
 
-    /* ---- intestazione ---- */
+    /* ---- heading ---- */
     if (L.meeting[0]) snprintf(buf, sizeof(buf), "%s  -  %s", L.meeting, L.sessione);
     else              snprintf(buf, sizeof(buf), "Live timing F1");
     uiSetText(s_liveTitolo, buf);
@@ -163,7 +163,7 @@ static void aggiornaLive(bool forza)
     else if (prossimaSessione(*s_D, buf, sizeof(buf))) uiSetText(s_liveSotto, buf);
     else uiSetText(s_liveSotto, L.messaggio[0] ? L.messaggio : "");
 
-    if (gara && L.giriTot > 0) snprintf(buf, sizeof(buf), "GIRO %u/%u", L.giro, L.giriTot);
+    if (gara && L.giriTot > 0) snprintf(buf, sizeof(buf), "LAP %u/%u", L.giro, L.giriTot);
     else buf[0] = 0;
     uiSetText(s_chipGiro, buf);
 
@@ -178,13 +178,13 @@ static void aggiornaLive(bool forza)
     lv_obj_set_style_bg_color(s_chipStato, bg, 0);
 
     for (uint8_t c = 0; c < 2; ++c) {
-        uiSetText(s_intest[c][0], L.n == 0 ? "" : (gara ? "DISTACCO" : "GIRO MIGLIORE"));
-        uiSetText(s_intest[c][1], L.n == 0 ? "" : (gara ? "INTERVALLO" : "DIFF."));
+        uiSetText(s_intest[c][0], L.n == 0 ? "" : (gara ? "GAP" : "BEST LAP"));
+        uiSetText(s_intest[c][1], L.n == 0 ? "" : (gara ? "INTERVAL" : "DELTA"));
     }
 
-    /* ---- nessun dato: calendario del prossimo GP ---- */
+    /* ---- no data: calendar of the next GP ---- */
     if (L.n == 0) {
-        String s = "Nessun dato dal live timing.\n\n";
+        String s = "No data from the live timing.\n\n";
         if (s_D->prossimoNome[0]) {
             s += s_D->prossimoNome;
             s += "  -  ";
@@ -204,7 +204,7 @@ static void aggiornaLive(bool forza)
         lv_obj_add_flag(s_liveVuoto, LV_OBJ_FLAG_HIDDEN);
     }
 
-    /* tempo migliore assoluto per i distacchi in prova/qualifica */
+    /* absolute best time for the gaps in practice/qualifying */
     uint32_t migliore = 0;
     for (uint8_t i = 0; i < L.n; ++i) {
         if (L.p[i].miglioreMs > 0 && (migliore == 0 || L.p[i].miglioreMs < migliore)) migliore = L.p[i].miglioreMs;
@@ -242,7 +242,7 @@ static void aggiornaLive(bool forza)
         }
 
         if (gara) {
-            if (p.pos == 1) snprintf(buf, sizeof(buf), "%u giri", p.giri);
+            if (p.pos == 1) snprintf(buf, sizeof(buf), "%u laps", p.giri);
             else            snprintf(buf, sizeof(buf), "%s", p.gap);
             uiSetText(R.v1, buf);
             uiSetText(R.v2, p.pos == 1 ? "" : p.intervallo);
@@ -256,7 +256,7 @@ static void aggiornaLive(bool forza)
             uiSetText(R.v2, buf);
         }
 
-        if (p.ritirato)   { uiSetText(R.tag, "RIT");  uiSetColor(R.tag, C_RED); }
+        if (p.ritirato)   { uiSetText(R.tag, "RET");  uiSetColor(R.tag, C_RED); }
         else if (p.fermo) { uiSetText(R.tag, "STOP"); uiSetColor(R.tag, C_RED); }
         else if (p.inPit) { uiSetText(R.tag, "PIT");  uiSetColor(R.tag, C_YELLOW); }
         else if (gara && p.pit > 0) {
@@ -272,7 +272,7 @@ static void aggiornaLive(bool forza)
 }
 
 /* ===========================================================================
- *  PILOTI
+ *  DRIVERS
  * ========================================================================= */
 #define CLASS_RIGHE 13
 
@@ -319,8 +319,8 @@ static void aggiornaPiloti(bool forza)
 
     const F1Dati &d = *s_D;
     char buf[96];
-    if (d.nPiloti == 0) snprintf(buf, sizeof(buf), "Classifica piloti: in attesa dei dati...");
-    else snprintf(buf, sizeof(buf), "Classifica piloti %s  -  dopo %u gare", d.stagione, d.round);
+    if (d.nPiloti == 0) snprintf(buf, sizeof(buf), "Drivers' standings: waiting for data...");
+    else snprintf(buf, sizeof(buf), "Drivers' standings %s  -  after %u races", d.stagione, d.round);
     uiSetText(s_pilotiTitolo, buf);
 
     const uint8_t perCol = d.nPiloti > 2 * 11 ? CLASS_RIGHE : 11;
@@ -344,7 +344,7 @@ static void aggiornaPiloti(bool forza)
             uiSetText(R.team, p.team);
             fmtPunti(p.punti, buf, sizeof(buf));
             uiSetText(R.punti, buf);
-            if (p.vittorie > 0) snprintf(buf, sizeof(buf), "%uV", p.vittorie);
+            if (p.vittorie > 0) snprintf(buf, sizeof(buf), "%uW", p.vittorie);
             else buf[0] = 0;
             uiSetText(R.vitt, buf);
         }
@@ -352,7 +352,7 @@ static void aggiornaPiloti(bool forza)
 }
 
 /* ===========================================================================
- *  COSTRUTTORI
+ *  CONSTRUCTORS
  * ========================================================================= */
 struct RigaTeam {
     lv_obj_t *pos, *bar, *nome, *barra, *punti, *vitt;
@@ -396,8 +396,8 @@ static void aggiornaTeam(bool forza)
 
     const F1Dati &d = *s_D;
     char buf[96];
-    if (d.nTeam == 0) snprintf(buf, sizeof(buf), "Classifica costruttori: in attesa dei dati...");
-    else snprintf(buf, sizeof(buf), "Classifica costruttori %s  -  dopo %u gare", d.stagione, d.round);
+    if (d.nTeam == 0) snprintf(buf, sizeof(buf), "Constructors' standings: waiting for data...");
+    else snprintf(buf, sizeof(buf), "Constructors' standings %s  -  after %u races", d.stagione, d.round);
     uiSetText(s_teamTitolo, buf);
 
     const float max = d.nTeam > 0 && d.team[0].punti > 0 ? d.team[0].punti : 1.0f;
@@ -420,14 +420,14 @@ static void aggiornaTeam(bool forza)
         lv_bar_set_value(R.barra, (int32_t)(t.punti * 1000.0f / max), LV_ANIM_OFF);
         fmtPunti(t.punti, buf, sizeof(buf));
         uiSetText(R.punti, buf);
-        if (t.vittorie > 0) snprintf(buf, sizeof(buf), "%u vitt.", t.vittorie);
+        if (t.vittorie > 0) snprintf(buf, sizeof(buf), "%u wins", t.vittorie);
         else buf[0] = 0;
         uiSetText(R.vitt, buf);
     }
 }
 
 /* ===========================================================================
- *  ULTIMA GARA
+ *  LAST RACE
  * ========================================================================= */
 struct RigaRis {
     lv_obj_t *pos, *bar, *cod, *nome, *tempo, *griglia, *punti, *gv;
@@ -468,7 +468,7 @@ static void aggiornaRis(bool forza)
     const F1Dati &d = *s_D;
     char buf[96];
     if (d.nRis == 0) {
-        snprintf(buf, sizeof(buf), "Ultima gara: in attesa dei dati...");
+        snprintf(buf, sizeof(buf), "Last race: waiting for data...");
     } else {
         char data[16] = "";
         if (strlen(d.garaData) >= 10) snprintf(data, sizeof(data), "%.2s/%.2s/%.4s", d.garaData + 8, d.garaData + 5, d.garaData);
@@ -495,27 +495,27 @@ static void aggiornaRis(bool forza)
             uiSetText(R.cod, x.codice);
             uiSetText(R.nome, x.cognome);
             uiSetText(R.tempo, x.tempo);
-            uiSetColor(R.tempo, (x.tempo[0] == 'R' || x.tempo[0] == 'N' || x.tempo[0] == 'S') ? C_RED : C_TEXT);
-            if (x.griglia > 0) snprintf(buf, sizeof(buf), "da %u", x.griglia);
+            uiSetColor(R.tempo, (x.tempo[0] == 'R' || x.tempo[0] == 'D') ? C_RED : C_TEXT);
+            if (x.griglia > 0) snprintf(buf, sizeof(buf), "from %u", x.griglia);
             else               snprintf(buf, sizeof(buf), "pit");
             uiSetText(R.griglia, buf);
             if (x.punti > 0) { char p[12]; fmtPunti(x.punti, p, sizeof(p)); snprintf(buf, sizeof(buf), "+%s", p); }
             else buf[0] = 0;
             uiSetText(R.punti, buf);
-            uiSetText(R.gv, x.giroVeloce ? "GV" : "");
+            uiSetText(R.gv, x.giroVeloce ? "FL" : "");
         }
     }
 }
 
 /* ===========================================================================
- *  MAPPA: sagoma del circuito e posizione stimata delle monoposto
+ *  MAP: circuit outline and estimated position of the cars
  *
- *  Le coordinate GPS delle auto (Position.z) il live timing le da' solo agli
- *  abbonati F1 TV. Qui la posizione e' una STIMA: dall'ultimo passaggio sul
- *  traguardo (NumberOfLaps) e dall'ultimo tempo sul giro si ricava la frazione
- *  di giro percorsa, che si riporta sulla sagoma di MultiViewer usando i suoi
- *  tempi di riferimento punto per punto. Chi non ha ancora un passaggio noto
- *  viene piazzato dal distacco dal leader. Box, ritirati e fermi: nascosti.
+ *  The GPS coordinates of the cars (Position.z) are given by the live timing only to
+ *  F1 TV subscribers. Here the position is an ESTIMATE: from the last crossing of the
+ *  line (NumberOfLaps) and the last lap time the fraction of the lap
+ *  covered is derived, and mapped onto the MultiViewer outline using its
+ *  point-by-point reference times. Cars without a known crossing yet
+ *  are placed from their gap to the leader. Pit, retired and stopped: hidden.
  * ========================================================================= */
 #define MAPPA_X   UI_PAD
 #define MAPPA_Y   UI_PAD
@@ -543,7 +543,7 @@ struct RigaElenco { lv_obj_t *pos, *bar, *tla, *gomma, *gap, *tocco; };
 static RigaElenco s_el[ELENCO_RIGHE];
 
 static lv_point_precise_t s_pts[TRK_MAX + 1];
-static int16_t   *s_tx = nullptr, *s_ty = nullptr;    /* copia della sagoma */
+static int16_t   *s_tx = nullptr, *s_ty = nullptr;    /* copy of the outline */
 static uint16_t  *s_tt = nullptr;
 static uint16_t   s_tn = 0, s_tGiro = 1;
 static bool       s_tCompleta = false, s_tTempi = false;
@@ -555,8 +555,8 @@ static bool       s_sessioneAttiva = false, s_gara = false;
 static char       s_sessione[80] = "";
 static int32_t    s_minX = 0, s_maxX = 0, s_minY = 0, s_maxY = 0;
 
-/* piloti nascosti sulla mappa: un bit per numero di gara (0..127), in NVS.
- * Si sceglie toccando la riga del pilota nell'elenco a destra.             */
+/* drivers hidden on the map: one bit per race number (0..127), in NVS.
+ * Chosen by tapping the driver's row in the list on the right.             */
 static uint8_t s_nascosti[16];
 
 static bool pilotaNascosto(const char *num)
@@ -621,7 +621,7 @@ static lv_obj_t *bottoncino(lv_obj_t *parent, lv_coord_t x, lv_coord_t w, const 
     return b;
 }
 
-/* coordinate del circuito -> pixel nella mappa (Y verso l'alto nei dati) */
+/* circuit coordinates -> pixels in the map (Y upwards in the data) */
 static void proietta(int32_t x, int32_t y, int32_t *px, int32_t *py)
 {
     const float w = (float)(s_maxX - s_minX), h = (float)(s_maxY - s_minY);
@@ -634,7 +634,7 @@ static void proietta(int32_t x, int32_t y, int32_t *px, int32_t *py)
     *py = (int32_t)(offY + (s_maxY - y) * k);
 }
 
-/* frazione di giro 0..1 -> punto sulla sagoma (interpolato) */
+/* lap fraction 0..1 -> point on the outline (interpolated) */
 static void puntoSulGiro(float f, int32_t *x, int32_t *y)
 {
     const float target = f * (float)s_tGiro;
@@ -649,7 +649,7 @@ static void puntoSulGiro(float f, int32_t *x, int32_t *y)
     *y = (int32_t)(s_ty[lo] + (s_ty[hi] - s_ty[lo]) * a);
 }
 
-/* "+12.345" -> 12345 ms; 0 se non e' un distacco in secondi (es. "1L") */
+/* "+12.345" -> 12345 ms; 0 if it is not a gap in seconds (e.g. "1L") */
 static uint32_t distaccoMs(const char *g)
 {
     if (g == nullptr || g[0] != '+') return 0;
@@ -673,7 +673,7 @@ static void creaMappa(lv_obj_t *pg)
     lv_obj_set_style_line_color(s_linea, lv_color_hex(0x3A4250), 0);
     lv_obj_set_style_line_rounded(s_linea, true, 0);
 
-    /* traguardo: tacca bianca sul primo punto */
+    /* finish line: white notch on the first point */
     s_traguardo = uiBox(s_mappa, 0, 0, 12, 12, C_TEXT);
     lv_obj_set_style_radius(s_traguardo, 2, 0);
     lv_obj_add_flag(s_traguardo, LV_OBJ_FLAG_HIDDEN);
@@ -695,8 +695,8 @@ static void creaMappa(lv_obj_t *pg)
     caricaNascosti();
     lv_obj_t *el = uiCard(pg, ELENCO_X, MAPPA_Y, ELENCO_W, MAPPA_H);
     s_elTit = uiCol(el, 0, 3, 120, &lv_font_montserrat_12, C_MUTED, LV_TEXT_ALIGN_LEFT);
-    bottoncino(el, ELENCO_W - 16 - 152, 64, "TUTTI", false);
-    bottoncino(el, ELENCO_W - 16 - 82, 82, "NESSUNO", true);
+    bottoncino(el, ELENCO_W - 16 - 152, 64, "ALL", false);
+    bottoncino(el, ELENCO_W - 16 - 82, 82, "NONE", true);
     for (uint8_t r = 0; r < ELENCO_RIGHE; ++r) {
         RigaElenco &R = s_el[r];
         const lv_coord_t y = 28 + r * 18;
@@ -706,7 +706,7 @@ static void creaMappa(lv_obj_t *pg)
         R.gomma = uiCol(el, 92,  y, 40, &lv_font_montserrat_14, C_MUTED, LV_TEXT_ALIGN_LEFT);
         R.gap   = uiCol(el, 132, y, ELENCO_W - 16 - 132, &lv_font_montserrat_14, C_MUTED, LV_TEXT_ALIGN_RIGHT);
         lv_obj_add_flag(R.bar, LV_OBJ_FLAG_HIDDEN);
-        /* zona trasparente sopra la riga: tocco = mostra/nascondi sulla mappa */
+        /* transparent area over the row: tap = show/hide on the map */
         R.tocco = lv_obj_create(el);
         lv_obj_remove_style_all(R.tocco);
         lv_obj_set_pos(R.tocco, 0, y - 1);
@@ -760,7 +760,7 @@ static void aggiornaMappa(bool forza)
     }
     dataUnlock();
 
-    /* sagoma: limiti e linea, solo quando cambia */
+    /* outline: limits and line, only when it changes */
     if (nuovaSagoma) {
         if (s_tCompleta) {
             s_minX = s_maxX = s_tx[0]; s_minY = s_maxY = s_ty[0];
@@ -776,7 +776,7 @@ static void aggiornaMappa(bool forza)
                 proietta(s_tx[i], s_ty[i], &px, &py);
                 s_pts[n].x = px; s_pts[n].y = py; n++;
             }
-            s_pts[n++] = s_pts[0];                         /* chiude il giro */
+            s_pts[n++] = s_pts[0];                         /* closes the lap */
             lv_line_set_points(s_linea, s_pts, n);
             lv_obj_remove_flag(s_linea, LV_OBJ_FLAG_HIDDEN);
             lv_obj_set_pos(s_traguardo, (int32_t)s_pts[0].x - 6, (int32_t)s_pts[0].y - 6);
@@ -787,10 +787,10 @@ static void aggiornaMappa(bool forza)
         }
     }
 
-    /* posizioni stimate: ricalcolate a ogni giro del timer (si muovono col tempo) */
+    /* estimated positions: recomputed at every timer tick (they move with time) */
     const uint32_t ora = millis();
     const uint32_t rifMs = s_tTempi ? (uint32_t)s_tGiro * 10 : 0;
-    /* tempo trascorso dal passaggio del leader: base per chi non ha un passaggio noto */
+    /* time elapsed since the leader's crossing: base for cars without a known crossing */
     int64_t eLeader = -1;
     uint32_t giroLeader = 0;
     if (s_nAuto > 0 && s_auto[0].passaggioMs != 0) {
@@ -803,7 +803,7 @@ static void aggiornaMappa(bool forza)
         int32_t px = 0, py = 0;
         if (i < s_nAuto && s_tCompleta && s_sessioneAttiva && !s_auto[i].nascosta) {
             const PuntoAuto &a = s_auto[i];
-            /* durata del giro attesa: l'ultimo giro dell'auto, se plausibile */
+            /* expected lap duration: the car's last lap, if plausible */
             uint32_t giro = a.giroMs ? a.giroMs : (giroLeader ? giroLeader : rifMs);
             if (rifMs > 0 && (giro < rifMs * 8 / 10 || giro > rifMs * 2)) giro = rifMs;
             int64_t e = -1;
@@ -815,7 +815,7 @@ static void aggiornaMappa(bool forza)
             }
             if (giro > 0 && e >= 0 && e < (int64_t)giro * 25 / 10) {
                 float f = (float)e / (float)giro;
-                if (f > 0.995f) f = 0.995f;                 /* aspetta il passaggio sul traguardo */
+                if (f > 0.995f) f = 0.995f;                 /* wait for the crossing of the line */
                 int32_t x, y;
                 puntoSulGiro(f, &x, &y);
                 proietta(x, y, &px, &py);
@@ -838,14 +838,14 @@ static void aggiornaMappa(bool forza)
     if (s_nAuto > 0) { lv_obj_move_foreground(s_dot[0]); lv_obj_move_foreground(s_dotLbl[0]); }
 
     char buf[128];
-    if (!s_tCompleta)             snprintf(buf, sizeof(buf), "%s", "Sagoma del circuito in arrivo (MultiViewer)...");
-    else if (!s_sessioneAttiva)   snprintf(buf, sizeof(buf), "%s%sNessuna sessione in corso", s_sessione, s_sessione[0] ? "   -   " : "");
-    else if (visibili == 0)       snprintf(buf, sizeof(buf), "%s   -   posizioni dal prossimo passaggio sul traguardo", s_sessione);
-    else                          snprintf(buf, sizeof(buf), "%s   -   posizioni stimate", s_sessione);
+    if (!s_tCompleta)             snprintf(buf, sizeof(buf), "%s", "Circuit outline on its way (MultiViewer)...");
+    else if (!s_sessioneAttiva)   snprintf(buf, sizeof(buf), "%s%sNo session in progress", s_sessione, s_sessione[0] ? "   -   " : "");
+    else if (visibili == 0)       snprintf(buf, sizeof(buf), "%s   -   positions from the next crossing of the line", s_sessione);
+    else                          snprintf(buf, sizeof(buf), "%s   -   estimated positions", s_sessione);
     uiSetText(s_mappaInfo, buf);
 
     if (!nuoviDati && !forza) return;
-    uiSetText(s_elTit, "TOCCA PER SCEGLIERE");
+    uiSetText(s_elTit, "TAP TO SELECT");
     for (uint8_t r = 0; r < ELENCO_RIGHE; ++r) {
         RigaElenco &R = s_el[r];
         if (r >= s_nAuto) {
@@ -862,7 +862,7 @@ static void aggiornaMappa(bool forza)
         if (a.gomma) { snprintf(buf, sizeof(buf), "%c", a.gomma); uiSetText(R.gomma, buf); uiSetColor(R.gomma, uiColoreGomma(a.gomma)); }
         else uiSetText(R.gomma, "");
         uiSetText(R.gap, a.gap);
-        /* pilota escluso dalla mappa: riga attenuata */
+        /* driver excluded from the map: dimmed row */
         const lv_opa_t opa = pilotaNascosto(a.num) ? LV_OPA_30 : LV_OPA_COVER;
         lv_obj_set_style_opa(R.pos, opa, 0);
         lv_obj_set_style_opa(R.bar, opa, 0);
@@ -872,7 +872,7 @@ static void aggiornaMappa(bool forza)
     }
 }
 
-/* le auto si muovono di continuo: ridisegno ogni 300 ms con la pagina visibile */
+/* the cars move continuously: redraw every 300 ms with the page visible */
 static void timerMappa(lv_timer_t *t)
 {
     (void)t;
@@ -926,11 +926,11 @@ void uiF1Stato(char *out, size_t n)
         dataUnlock();
     }
     if (live) {
-        if (tot > 0) snprintf(out, n, "IN DIRETTA:  %s   giro %u/%u", sess, giro, tot);
-        else         snprintf(out, n, "IN DIRETTA:  %s", sess);
+        if (tot > 0) snprintf(out, n, "LIVE:  %s   lap %u/%u", sess, giro, tot);
+        else         snprintf(out, n, "LIVE:  %s", sess);
     } else if (prossima[0]) {
-        snprintf(out, n, "%s%s", prossima, connesso ? "   (live timing collegato)" : "");
+        snprintf(out, n, "%s%s", prossima, connesso ? "   (live timing connected)" : "");
     } else {
-        snprintf(out, n, "Formula 1  -  dati Jolpica e live timing F1");
+        snprintf(out, n, "Formula 1  -  Jolpica data and F1 live timing");
     }
 }

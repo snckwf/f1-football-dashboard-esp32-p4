@@ -26,7 +26,7 @@
 #define LV_USE_DRAW_EVE 0
 #define LV_USE_DRAW_NANOVG 0
 
-/* allocatore in PSRAM: vedi LvMemPsram.cpp */
+/* allocator in PSRAM: see LvMemPsram.cpp */
 #define LV_USE_STDLIB_MALLOC LV_STDLIB_CUSTOM
 #define LV_USE_STDLIB_STRING LV_STDLIB_CLIB
 #define LV_USE_STDLIB_SPRINTF LV_STDLIB_CLIB
@@ -36,7 +36,7 @@
 #define LV_USE_ASSERT_MALLOC 0
 #define LV_USE_ASSERT_STYLE 0
 
-/* Font: i 28/36/48 servono per i numeroni della dashboard */
+/* Fonts: 28/36/48 are for the big numbers of the dashboard */
 #define LV_FONT_MONTSERRAT_12 1
 #define LV_FONT_MONTSERRAT_14 1
 #define LV_FONT_MONTSERRAT_16 1
@@ -49,7 +49,7 @@
 #define LV_FONT_MONTSERRAT_48 1
 #define LV_FONT_DEFAULT &lv_font_montserrat_14
 
-/* Widget effettivamente usati, dichiarati in modo esplicito */
+/* Widgets actually used, declared explicitly */
 #define LV_USE_LABEL 1
 #define LV_USE_BUTTON 1
 #define LV_USE_BTN 1

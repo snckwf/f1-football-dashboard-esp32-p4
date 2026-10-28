@@ -1,8 +1,8 @@
 /* ============================================================================
- *  PsramJson - allocatore ArduinoJson in PSRAM
+ *  PsramJson - ArduinoJson allocator in PSRAM
  *
- *  ArduinoJson 7 alloca a blocchi piccoli: con malloc() finirebbero in RAM
- *  interna, che serve invece agli handshake TLS. Uso:
+ *  ArduinoJson 7 allocates in small blocks: with malloc() they would end up in
+ *  internal RAM, which is needed instead for the TLS handshakes. Usage:
  *      JsonDocument doc(PSRAM_JSON);
  * ========================================================================== */
 #pragma once

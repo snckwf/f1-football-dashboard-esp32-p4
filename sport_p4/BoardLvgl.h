@@ -1,6 +1,6 @@
 /* ============================================================================
- *  BoardLvgl - display MIPI-DSI, touch GT911 e task LVGL
- *  Basato sullo sketch gia' validato su questa scheda.
+ *  BoardLvgl - MIPI-DSI display, GT911 touch and LVGL task
+ *  Based on the sketch already validated on this board.
  * ========================================================================== */
 #pragma once
 
@@ -15,7 +15,7 @@ const char *boardTouchStatus();
 void        boardResetScreenTimeout();
 bool        boardIsScreenOn();
 
-/* luminosita' 5..100 % e standby (0 = mai), regolabili a runtime */
+/* brightness 5..100 % and standby (0 = never), adjustable at runtime */
 void        boardSetBrightness(uint8_t percent);
 uint8_t     boardGetBrightness();
 void        boardSetScreenTimeoutMs(uint32_t ms);

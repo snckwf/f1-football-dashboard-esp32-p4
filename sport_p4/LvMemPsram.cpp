@@ -1,11 +1,11 @@
 /* ============================================================================
- *  LvMemPsram - allocatore di LVGL in PSRAM
+ *  LvMemPsram - LVGL allocator in PSRAM
  *
- *  Con LV_STDLIB_CLIB LVGL usa malloc(): sotto i 4 KB il core ESP32 alloca in
- *  RAM interna, e le ~1000 etichette di questo progetto si mangiavano quasi
- *  tutta la RAM interna (59 KB liberi), lasciando senza memoria gli handshake
- *  TLS. Qui ogni allocazione di LVGL va in PSRAM (32 MB).
- *  Attivo con LV_USE_STDLIB_MALLOC = LV_STDLIB_CUSTOM in lv_conf.h.
+ *  With LV_STDLIB_CLIB LVGL uses malloc(): below 4 KB the ESP32 core allocates in
+ *  internal RAM, and the ~1000 labels of this project ate almost
+ *  all the internal RAM (59 KB free), leaving the TLS handshakes without
+ *  memory. Here every LVGL allocation goes to PSRAM (32 MB).
+ *  Enabled with LV_USE_STDLIB_MALLOC = LV_STDLIB_CUSTOM in lv_conf.h.
  * ========================================================================== */
 #include <lvgl.h>
 #include <string.h>

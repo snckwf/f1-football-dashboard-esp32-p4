@@ -1,15 +1,15 @@
 /* ============================================================================
- *  CalcioClient - ESPN (site.api.espn.com), nessuna chiave API
+ *  FootballClient - ESPN (site.api.espn.com), no API key
  *
- *  Per ogni competizione:
- *    lista   una richiesta per giorno nella finestra -2..+5 giorni
- *            (l'endpoint non accetta intervalli di date, solo giorni singoli)
- *    live    solo il giorno di oggi, ogni 60 s, ogni 20 s se c'e' una partita
- *            in corso o in partenza: confronta i punteggi e segnala i gol
- *  Classifica della Serie A ogni 30 minuti.
+ *  For each competition:
+ *    list    one request per day in the -2..+5 day window
+ *            (the endpoint does not accept date ranges, only single days)
+ *    live    today only, every 60 s, every 20 s if a match is
+ *            in progress or about to start: compares the scores and reports goals
+ *  Serie A standings every 30 minutes.
  *
- *  Come negli altri progetti, HTTPS passa dal semplice HTTPClient: senza
- *  certificato il core fa setInsecure() da solo.
+ *  As in the other projects, HTTPS goes through the plain HTTPClient: without
+ *  a certificate the core calls setInsecure() by itself.
  * ========================================================================== */
 #include <ArduinoJson.h>
 #include "PsramJson.h"
@@ -20,7 +20,7 @@
 #include "Clients.h"
 #include "DataModel.h"
 #include "Notify.h"
-#include "Impostazioni.h"
+#include "Settings.h"
 #include "esp_heap_caps.h"
 
 static const char BASE_SB[]  = "https://site.api.espn.com/apis/site/v2/sports/soccer/";
@@ -31,11 +31,11 @@ static uint32_t  s_tentativoLista[CALCIO_COMP_COUNT] = { 0 };
 static uint32_t  s_ultimoLive[CALCIO_COMP_COUNT]     = { 0 };
 
 /* ---------------------------------------------------------------------------
- *  HTTP (condiviso anche con il client F1)
+ *  HTTP (also shared with the F1 client)
  * ------------------------------------------------------------------------- */
-/* Il corpo si legge a mano invece di usare getString(): getString() aspetta i
- * dati in un ciclo senza mai cedere la CPU e, con una risposta lenta, fa
- * scattare il watchdog del core 0 (verificato con addr2line il 04/10/2026). */
+/* The body is read by hand instead of using getString(): getString() waits for
+ * data in a loop without ever yielding the CPU and, with a slow reply, it
+ * triggers the core 0 watchdog (verified with addr2line on 04/10/2026). */
 static bool leggiRigaHttp(NetworkClient &s, char *buf, size_t n)
 {
     size_t i = 0;
@@ -79,7 +79,7 @@ static bool leggiBlocco(NetworkClient &s, String &out, long quanti)
                 continue;
             }
         } else if (!s.connected()) {
-            return quanti < 0;           /* senza lunghezza: fine = chiusura */
+            return quanti < 0;           /* no length: end = connection closed */
         }
         if (millis() - t0 > WEB_HTTP_TIMEOUT_MS) return false;
         vTaskDelay(pdMS_TO_TICKS(2));
@@ -87,8 +87,8 @@ static bool leggiBlocco(NetworkClient &s, String &out, long quanti)
     return true;
 }
 
-/* Una sola connessione HTTPS alla volta: il WiFi passa dal C6 via SDIO
- * (ESP-Hosted) e ogni handshake TLS prende parecchia RAM interna. */
+/* Only one HTTPS connection at a time: the WiFi goes through the C6 via SDIO
+ * (ESP-Hosted) and every TLS handshake takes a lot of internal RAM. */
 static SemaphoreHandle_t s_reteMutex = nullptr;
 
 bool reteLock(uint32_t timeoutMs)
@@ -110,7 +110,7 @@ int httpGet(const String &url, String &out)
     const int code = httpGetInterno(url, out);
     reteUnlock();
     if (code != HTTP_CODE_OK) {
-        Serial.printf("[HTTP] %d  %s  (RAM interna libera %u)\n", code, url.c_str(),
+        Serial.printf("[HTTP] %d  %s  (free internal RAM %u)\n", code, url.c_str(),
                       (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
     }
     return code;
@@ -147,7 +147,7 @@ static int httpGetInterno(const String &url, String &out)
             const long n = strtol(riga, nullptr, 16);
             if (n <= 0) break;
             if (!leggiBlocco(*s, out, n)) { ok = false; break; }
-            leggiRigaHttp(*s, riga, sizeof(riga));     /* CRLF dopo il blocco */
+            leggiRigaHttp(*s, riga, sizeof(riga));     /* CRLF after the block */
         }
     } else {
         if (size > 0) out.reserve(size + 1);
@@ -167,7 +167,7 @@ bool reteOk()
 }
 
 /* ---------------------------------------------------------------------------
- *  Parsing di uno scoreboard ESPN
+ *  Parsing an ESPN scoreboard
  * ------------------------------------------------------------------------- */
 static void filtroScoreboard(JsonDocument &f)
 {
@@ -184,7 +184,7 @@ static void filtroScoreboard(JsonDocument &f)
     comp["competitors"][0]["team"]["shortDisplayName"]  = true;
     comp["notes"][0]["headline"]                        = true;
     comp["competitors"][0]["id"]                        = true;
-    /* eventi della partita: gol e cartellini con minuto e giocatore */
+    /* match events: goals and cards with minute and player */
     comp["details"][0]["redCard"]                       = true;
     comp["details"][0]["scoringPlay"]                   = true;
     comp["details"][0]["ownGoal"]                       = true;
@@ -222,18 +222,18 @@ static bool leggiEvento(JsonObject e, Partita &m)
     else if (strcmp(state, "post") == 0) m.stato = 'f';
     else                                 m.stato = 'p';
 
-    if (strstr(name, "POSTPONED")) { m.stato = 'x'; snprintf(m.dettaglio, sizeof(m.dettaglio), "RINVIATA"); }
-    else if (strstr(name, "CANCELED") || strstr(name, "CANCELLED")) { m.stato = 'x'; snprintf(m.dettaglio, sizeof(m.dettaglio), "ANNULLATA"); }
-    else if (strstr(name, "ABANDONED") || strstr(name, "SUSPENDED")) { m.stato = 'x'; snprintf(m.dettaglio, sizeof(m.dettaglio), "SOSPESA"); }
+    if (strstr(name, "POSTPONED")) { m.stato = 'x'; snprintf(m.dettaglio, sizeof(m.dettaglio), "PPD"); }
+    else if (strstr(name, "CANCELED") || strstr(name, "CANCELLED")) { m.stato = 'x'; snprintf(m.dettaglio, sizeof(m.dettaglio), "CANC"); }
+    else if (strstr(name, "ABANDONED") || strstr(name, "SUSPENDED")) { m.stato = 'x'; snprintf(m.dettaglio, sizeof(m.dettaglio), "SUSP"); }
 
     if (m.stato == 'i') {
-        if (strstr(name, "HALFTIME"))      snprintf(m.minuto, sizeof(m.minuto), "INT");
-        else if (strstr(name, "SHOOTOUT")) snprintf(m.minuto, sizeof(m.minuto), "RIGORI");
+        if (strstr(name, "HALFTIME"))      snprintf(m.minuto, sizeof(m.minuto), "HT");
+        else if (strstr(name, "SHOOTOUT")) snprintf(m.minuto, sizeof(m.minuto), "PENS");
         else asciiFold(e["status"]["displayClock"] | "", m.minuto, sizeof(m.minuto));
     } else if (m.stato == 'f') {
-        if (strstr(sd, "Pen"))      snprintf(m.dettaglio, sizeof(m.dettaglio), "D.RIG.");
-        else if (strstr(sd, "AET")) snprintf(m.dettaglio, sizeof(m.dettaglio), "D.T.S.");
-        else                        snprintf(m.dettaglio, sizeof(m.dettaglio), "FINALE");
+        if (strstr(sd, "Pen"))      snprintf(m.dettaglio, sizeof(m.dettaglio), "PENS");
+        else if (strstr(sd, "AET")) snprintf(m.dettaglio, sizeof(m.dettaglio), "AET");
+        else                        snprintf(m.dettaglio, sizeof(m.dettaglio), "FT");
     }
 
     JsonObject comp = e["competitions"][0];
@@ -258,7 +258,7 @@ static bool leggiEvento(JsonObject e, Partita &m)
     }
     asciiFold(comp["notes"][0]["headline"] | "", m.nota, sizeof(m.nota));
 
-    /* cartellini rossi e ultimo marcatore */
+    /* red cards and last scorer */
     for (JsonObject d : comp["details"].as<JsonArray>()) {
         if (d["shootout"] | false) continue;
         const bool casa = strcmp(d["team"]["id"] | "", idCasa) == 0;
@@ -270,14 +270,14 @@ static bool leggiEvento(JsonObject e, Partita &m)
             snprintf(m.ultimoRosso, sizeof(m.ultimoRosso), "%s %s", chi[0] ? chi : (casa ? m.casa : m.ospite), min);
         }
         if (d["scoringPlay"] | false) {
-            const char *nota = (d["ownGoal"] | false) ? " (aut.)" : ((d["penaltyKick"] | false) ? " (rig.)" : "");
+            const char *nota = (d["ownGoal"] | false) ? " (o.g.)" : ((d["penaltyKick"] | false) ? " (pen.)" : "");
             snprintf(m.marcatore, sizeof(m.marcatore), "%s %s%s", chi[0] ? chi : "", min, nota);
         }
     }
     return true;
 }
 
-/* aggiunge a dst gli eventi del body, saltando i doppioni; ritorna false se JSON rotto */
+/* adds the events of the body to dst, skipping duplicates; returns false if the JSON is broken */
 static bool parseScoreboard(const String &body, Partita *dst, uint16_t &n)
 {
     JsonDocument filtro(PSRAM_JSON);
@@ -313,8 +313,8 @@ static void giornoEspn(time_t t, char *out, size_t n)
 }
 
 /* ---------------------------------------------------------------------------
- *  Confronto vecchio/nuovo: gol, inizio, fine
- *  Chiamata con dataLock gia' preso.
+ *  Old/new comparison: goals, kick-off, full time
+ *  Called with dataLock already taken.
  * ------------------------------------------------------------------------- */
 static bool confronta(const Partita &vecchia, Partita &nuova, uint8_t c, bool notificare)
 {
@@ -336,45 +336,45 @@ static bool confronta(const Partita &vecchia, Partita &nuova, uint8_t c, bool no
         if (dopo > prima) {
             const char *chi = nuova.golCasa > vecchia.golCasa ? nuova.casa : nuova.ospite;
             if (nuova.marcatore[0]) {
-                notifySchermata(1, c), notifica(NOT_GOL, SND_GOL, "GOL %s!  %s   %s %d-%d %s   %s",
+                notifySchermata(1, c), notifica(NOT_GOL, SND_GOL, "GOAL %s!  %s   %s %d-%d %s   %s",
                          chi, nuova.marcatore, nuova.casa, nuova.golCasa, nuova.golOspite, nuova.ospite,
                          CALCIO_TAB[c]);
             } else {
-                notifySchermata(1, c), notifica(NOT_GOL, SND_GOL, "GOL %s!   %s %d-%d %s   %s   %s",
+                notifySchermata(1, c), notifica(NOT_GOL, SND_GOL, "GOAL %s!   %s %d-%d %s   %s   %s",
                          chi, nuova.casa, nuova.golCasa, nuova.golOspite, nuova.ospite,
                          nuova.minuto, CALCIO_TAB[c]);
             }
         } else {
-            notifySchermata(1, c), notifica(NOT_INFO, SND_MINER_DOWN, "Gol annullato:  %s %d-%d %s   %s",
+            notifySchermata(1, c), notifica(NOT_INFO, SND_MINER_DOWN, "Goal disallowed:  %s %d-%d %s   %s",
                      nuova.casa, nuova.golCasa, nuova.golOspite, nuova.ospite, CALCIO_TAB[c]);
         }
     }
-    /* cartellino rosso (solo a partita in corso, i rossi dopo il fischio finale no) */
+    /* red card (only with the match in progress, not red cards after the final whistle) */
     if (vecchia.stato == 'i' && nuova.stato == 'i' && imp().avvisiRossi &&
         nuova.rossiCasa + nuova.rossiOspite > vecchia.rossiCasa + vecchia.rossiOspite) {
         const char *squadra = nuova.rossiCasa > vecchia.rossiCasa ? nuova.casa : nuova.ospite;
-        notifySchermata(1, c), notifica(NOT_F1, SND_ESPULSIONE, "ESPULSO  %s (%s)   %s %d-%d %s   %s",
+        notifySchermata(1, c), notifica(NOT_F1, SND_ESPULSIONE, "SENT OFF  %s (%s)   %s %d-%d %s   %s",
                  nuova.ultimoRosso, squadra, nuova.casa, nuova.golCasa, nuova.golOspite, nuova.ospite,
                  CALCIO_TAB[c]);
     }
     if (vecchia.stato == 'p' && nuova.stato == 'i') {
-        notifySchermata(1, c), notifica(NOT_INFO, SND_FISCHIO_INIZIO, "Calcio d'inizio:  %s - %s   %s",
+        notifySchermata(1, c), notifica(NOT_INFO, SND_FISCHIO_INIZIO, "Kick-off:  %s - %s   %s",
                  nuova.casa, nuova.ospite, CALCIO_TAB[c]);
     }
-    /* intervallo e ripresa: ESPN mette "HALFTIME" nello stato, qui diventa "INT" */
+    /* half time and restart: ESPN puts "HALFTIME" in the status, here it becomes "HT" */
     if (vecchia.stato == 'i' && nuova.stato == 'i') {
-        const bool eraInt = strcmp(vecchia.minuto, "INT") == 0;
-        const bool eInt   = strcmp(nuova.minuto, "INT") == 0;
+        const bool eraInt = strcmp(vecchia.minuto, "HT") == 0;
+        const bool eInt   = strcmp(nuova.minuto, "HT") == 0;
         if (!eraInt && eInt && noto) {
-            notifySchermata(1, c), notifica(NOT_INFO, SND_FISCHIO_INTERVALLO, "Intervallo:  %s %d-%d %s   %s",
+            notifySchermata(1, c), notifica(NOT_INFO, SND_FISCHIO_INTERVALLO, "Half time:  %s %d-%d %s   %s",
                      nuova.casa, nuova.golCasa, nuova.golOspite, nuova.ospite, CALCIO_TAB[c]);
         } else if (eraInt && !eInt) {
-            notifySchermata(1, c), notifica(NOT_INFO, SND_FISCHIO_INIZIO, "Inizia il secondo tempo:  %s - %s   %s",
+            notifySchermata(1, c), notifica(NOT_INFO, SND_FISCHIO_INIZIO, "Second half under way:  %s - %s   %s",
                      nuova.casa, nuova.ospite, CALCIO_TAB[c]);
         }
     }
     if (vecchia.stato == 'i' && nuova.stato == 'f' && noto) {
-        notifySchermata(1, c), notifica(NOT_OK, SND_FISCHIO_FINE, "Finale:  %s %d-%d %s   %s", nuova.casa, nuova.golCasa,
+        notifySchermata(1, c), notifica(NOT_OK, SND_FISCHIO_FINE, "Full time:  %s %d-%d %s   %s", nuova.casa, nuova.golCasa,
                  nuova.golOspite, nuova.ospite, CALCIO_TAB[c]);
     }
     return cambiata;
@@ -388,7 +388,7 @@ static uint8_t contaLive(const Competizione &cp)
 }
 
 /* ---------------------------------------------------------------------------
- *  Lista completa di una competizione
+ *  Full list of a competition
  * ------------------------------------------------------------------------- */
 static bool pollLista(uint8_t c)
 {
@@ -411,7 +411,7 @@ static bool pollLista(uint8_t c)
 
     bool ripiego = false;
     if (risposta && n == 0) {
-        /* finestra vuota: giornata "corrente" secondo ESPN (spesso l'ultima giocata) */
+        /* empty window: "current" matchday according to ESPN (often the last one played) */
         String url = String(BASE_SB) + CALCIO_SLUG[c] + "/scoreboard";
         if (httpGet(url, body) == HTTP_CODE_OK) parseScoreboard(body, s_tmp, n);
         body = "";
@@ -424,7 +424,7 @@ static bool pollLista(uint8_t c)
             g_comp[c].versione++;
             dataUnlock();
         }
-        Serial.printf("[CALCIO] %s lista FALLITA (%d)\n", CALCIO_SLUG[c], ultimoCodice);
+        Serial.printf("[FOOTBALL] %s list FAILED (%d)\n", CALCIO_SLUG[c], ultimoCodice);
         return false;
     }
 
@@ -450,12 +450,12 @@ static bool pollLista(uint8_t c)
         cp.versione++;
         dataUnlock();
     }
-    Serial.printf("[CALCIO] %s: %u partite%s\n", CALCIO_SLUG[c], n, ripiego ? " (ripiego)" : "");
+    Serial.printf("[FOOTBALL] %s: %u matches%s\n", CALCIO_SLUG[c], n, ripiego ? " (fallback)" : "");
     return true;
 }
 
 /* ---------------------------------------------------------------------------
- *  Aggiornamento live (solo oggi)
+ *  Live update (today only)
  * ------------------------------------------------------------------------- */
 static bool serveLiveVeloce(uint8_t c)
 {
@@ -465,7 +465,7 @@ static bool serveLiveVeloce(uint8_t c)
         const Competizione &cp = g_comp[c];
         if (cp.live > 0) veloce = true;
         for (uint16_t i = 0; i < cp.n && !veloce; ++i) {
-            /* partita in partenza nei prossimi 5 minuti o "da giocare" da meno di 3 ore */
+            /* match starting in the next 5 minutes or "to be played" for less than 3 hours */
             if (cp.p[i].stato == 'p' && cp.p[i].inizio > 0 &&
                 cp.p[i].inizio <= ora + 300 && cp.p[i].inizio >= ora - 3 * 3600) veloce = true;
         }
@@ -489,7 +489,7 @@ static void pollLive(uint8_t c)
     String url = String(BASE_SB) + CALCIO_SLUG[c] + "/scoreboard?dates=" + giorno;
     if (httpGet(url, body) == HTTP_CODE_OK) parseScoreboard(body, s_tmp, n);
 
-    /* di notte (Mondiali in America) la partita puo' stare sul giorno prima */
+    /* at night (World Cup in America) the match may be on the previous day */
     if (lt.tm_hour < 8) {
         giornoEspn(ora - 86400, giorno, sizeof(giorno));
         url = String(BASE_SB) + CALCIO_SLUG[c] + "/scoreboard?dates=" + giorno;
@@ -524,14 +524,14 @@ static void pollLive(uint8_t c)
 }
 
 /* ---------------------------------------------------------------------------
- *  Classifica Serie A
+ *  Serie A standings
  * ------------------------------------------------------------------------- */
 static bool pollClassifica()
 {
     String body;
     const int code = httpGet(String(BASE_STD) + "ita.1/standings", body);
     if (code != HTTP_CODE_OK) {
-        Serial.printf("[CALCIO] classifica HTTP %d\n", code);
+        Serial.printf("[FOOTBALL] standings HTTP %d\n", code);
         return false;
     }
 
@@ -568,7 +568,7 @@ static bool pollClassifica()
     }
     if (cl.n == 0) return false;
 
-    /* ordina per posizione (ESPN non garantisce l'ordine) */
+    /* sort by position (ESPN does not guarantee the order) */
     for (uint8_t i = 1; i < cl.n; ++i) {
         RigaClassifica x = cl.r[i];
         int j = i - 1;
@@ -582,28 +582,28 @@ static bool pollClassifica()
         g_classSerieA = cl;
         dataUnlock();
     }
-    Serial.printf("[CALCIO] classifica Serie A: %u squadre\n", cl.n);
+    Serial.printf("[FOOTBALL] Serie A standings: %u teams\n", cl.n);
     return true;
 }
 
 /* ---------------------------------------------------------------------------
- *  Dettaglio di una partita (summary ESPN, ~350 KB filtrati a pochi KB)
+ *  Match detail (ESPN summary, ~350 KB filtered down to a few KB)
  * ------------------------------------------------------------------------- */
-static DettaglioPartita *s_det = nullptr;      /* copia di lavoro in PSRAM */
+static DettaglioPartita *s_det = nullptr;      /* working copy in PSRAM */
 
 struct NomeStat { const char *espn; const char *it; bool percentuale; };
 static const NomeStat STAT[] = {
-    { "possessionPct",   "Possesso palla",   true  },
-    { "totalShots",      "Tiri",             false },
-    { "shotsOnTarget",   "Tiri in porta",    false },
-    { "wonCorners",      "Calci d'angolo",   false },
-    { "foulsCommitted",  "Falli",            false },
-    { "yellowCards",     "Ammonizioni",      false },
-    { "redCards",        "Espulsioni",       false },
-    { "offsides",        "Fuorigioco",       false },
-    { "saves",           "Parate",           false },
-    { "totalPasses",     "Passaggi",         false },
-    { "passPct",         "Precisione pass.", true  },
+    { "possessionPct",   "Possession",       true  },
+    { "totalShots",      "Shots",            false },
+    { "shotsOnTarget",   "Shots on target",  false },
+    { "wonCorners",      "Corners",          false },
+    { "foulsCommitted",  "Fouls",            false },
+    { "yellowCards",     "Yellow cards",     false },
+    { "redCards",        "Red cards",        false },
+    { "offsides",        "Offsides",         false },
+    { "saves",           "Saves",            false },
+    { "totalPasses",     "Passes",           false },
+    { "passPct",         "Pass accuracy",    true  },
 };
 
 static void nomeBreve(const char *in, char *out, size_t n)
@@ -672,7 +672,7 @@ static bool pollDettaglio(uint8_t c, const char *id)
             const char *name  = hc["status"]["type"]["name"] | "";
             d.stato = strcmp(state, "in") == 0 ? 'i' : (strcmp(state, "post") == 0 ? 'f' : 'p');
             if (d.stato == 'i') {
-                if (strstr(name, "HALFTIME")) snprintf(d.minuto, sizeof(d.minuto), "INTERVALLO");
+                if (strstr(name, "HALFTIME")) snprintf(d.minuto, sizeof(d.minuto), "HALF TIME");
                 else asciiFold(hc["status"]["displayClock"] | "", d.minuto, sizeof(d.minuto));
             }
             asciiFold(hc["status"]["type"]["shortDetail"] | "", d.dettaglio, sizeof(d.dettaglio));
@@ -712,7 +712,7 @@ static bool pollDettaglio(uint8_t c, const char *id)
                 if (pa.size() > 1) nomeBreve(pa[1]["athlete"]["shortName"] | (pa[1]["athlete"]["displayName"] | ""), ev.nome2, sizeof(ev.nome2));
             }
 
-            /* statistiche, nell'ordine della tabella STAT */
+            /* statistics, in the order of the STAT table */
             JsonObject sc, so;
             for (JsonObject t : doc["boxscore"]["teams"].as<JsonArray>()) {
                 if (strcmp(t["homeAway"] | "", "home") == 0) sc = t; else so = t;
@@ -737,7 +737,7 @@ static bool pollDettaglio(uint8_t c, const char *id)
                 }
             }
 
-            /* formazioni: prima i titolari, poi chi e' entrato */
+            /* line-ups: starters first, then substitutes who came on */
             for (JsonObject r : doc["rosters"].as<JsonArray>()) {
                 const bool casa = strcmp(r["homeAway"] | "", "home") == 0;
                 Giocatore *g = casa ? d.gCasa : d.gOsp;
@@ -766,14 +766,14 @@ static bool pollDettaglio(uint8_t c, const char *id)
     }
     d.aggMs = millis();
     if (dataLock(1000)) {
-        /* scarta il risultato se nel frattempo l'utente ha aperto un'altra partita */
+        /* discard the result if in the meantime the user opened another match */
         if (strcmp(g_detId, id) == 0) {
             d.versione = g_det->versione + 1;
             memcpy(g_det, &d, sizeof(DettaglioPartita));
         }
         dataUnlock();
     }
-    Serial.printf("[CALCIO] dettaglio %s: %s, %u eventi, %u stat, %u+%u giocatori\n", id,
+    Serial.printf("[FOOTBALL] detail %s: %s, %u events, %u stats, %u+%u players\n", id,
                   d.pronto ? "ok" : d.errore, d.nEv, d.nStat, d.nCasa, d.nOsp);
     return d.pronto;
 }
@@ -797,7 +797,7 @@ void calcioTask(void *arg)
     while (true) {
         if (!reteOk()) { vTaskDelay(pdMS_TO_TICKS(2000)); continue; }
 
-        /* 0. scheda dettaglio: subito se richiesta, poi ogni 30 s se la partita e' in corso */
+        /* 0. detail card: immediately if requested, then every 30 s if the match is in progress */
         if (g_detAperto) {
             char id[16];
             uint8_t c = 0;
@@ -816,7 +816,7 @@ void calcioTask(void *arg)
             }
         }
 
-        /* 1. competizione a schermo */
+        /* 1. competition on screen */
         const uint8_t vis = g_compVisibile < CALCIO_COMP_COUNT ? g_compVisibile : 0;
         bool caricata = false;
         uint32_t agg = 0;
@@ -829,20 +829,20 @@ void calcioTask(void *arg)
         }
         g_richiestaLista = false;
 
-        /* 2. live su tutte le competizioni */
+        /* 2. live on all competitions */
         for (uint8_t c = 0; c < CALCIO_COMP_COUNT; ++c) {
             const uint32_t periodo = serveLiveVeloce(c) ? CALCIO_LIVE_ATTIVO_MS : CALCIO_LIVE_IDLE_MS;
             if (!compAttiva(c)) continue;
             if (s_ultimoLive[c] == 0 || millis() - s_ultimoLive[c] >= periodo) pollLive(c);
         }
 
-        /* 3. classifica */
+        /* 3. standings */
         if (compAttiva(0) && (ultimaClassifica == 0 || millis() - ultimaClassifica >= CALCIO_CLASSIFICA_MS)) {
             pollClassifica();
             ultimaClassifica = millis();
         }
 
-        /* 4. una lista non visibile alla volta, in sottofondo */
+        /* 4. one non-visible list at a time, in the background */
         for (uint8_t k = 0; k < CALCIO_COMP_COUNT; ++k) {
             const uint8_t c = (prossimaAltra + k) % CALCIO_COMP_COUNT;
             if (c == g_compVisibile || !compAttiva(c)) continue;

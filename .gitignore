@@ -1,11 +1,11 @@
-# credenziali locali
+# local credentials
 secrets.h
-# build Arduino
+# Arduino build
 build/
 *.bin
 *.elf
 *.map
-# sistema
+# system
 .vscode/
 Thumbs.db
 desktop.ini

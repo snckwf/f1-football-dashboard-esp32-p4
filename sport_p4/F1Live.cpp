@@ -1,20 +1,20 @@
 /* ============================================================================
- *  F1Live - tempo reale dal live timing ufficiale (livetiming.formula1.com)
+ *  F1Live - real time from the official live timing (livetiming.formula1.com)
  *
- *  Protocollo: SignalR Core su WebSocket, formato JSON. Non serve login per i
- *  topic usati qui (verificato il 04/10/2026):
- *    1. POST /signalrcore/negotiate?negotiateVersion=1  -> connectionToken + cookie AWSALB
- *    2. GET  /signalrcore?id=<token>  con Upgrade: websocket e lo stesso cookie
+ *  Protocol: SignalR Core over WebSocket, JSON format. No login is needed for the
+ *  topics used here (verified on 04/10/2026):
+ *    1. POST /signalrcore/negotiate?negotiateVersion=1  -> connectionToken + AWSALB cookie
+ *    2. GET  /signalrcore?id=<token>  with Upgrade: websocket and the same cookie
  *    3. {"protocol":"json","version":1}<0x1E>
- *    4. Subscribe ai topic -> risposta type 3 con lo stato completo,
- *       poi messaggi type 1 target "feed" con le sole differenze.
+ *    4. Subscribe to the topics -> type 3 reply with the full state,
+ *       then type 1 messages, target "feed", with the differences only.
  *
- *  Il client WebSocket e' scritto qui sopra NetworkClientSecure: cosi' non ci
- *  sono limiti di dimensione sui messaggi (lo stato iniziale supera i 40 KB) e
- *  il buffer sta in PSRAM.
+ *  The WebSocket client is written here on top of NetworkClientSecure: this way there
+ *  are no size limits on the messages (the initial state exceeds 40 KB) and
+ *  the buffer lives in PSRAM.
  *
- *  Fuori dalle sessioni ci si collega ogni 10 minuti solo per leggere lo stato
- *  e poi si chiude; durante la finestra di una sessione si resta collegati.
+ *  Outside sessions it connects every 10 minutes only to read the state
+ *  and then closes; during a session window it stays connected.
  * ========================================================================== */
 #include <ArduinoJson.h>
 #include "PsramJson.h"
@@ -48,13 +48,13 @@ static char     s_cookie[512];
 static char     s_token[128];
 static char     s_leader[4] = "";
 
-/* sagoma del circuito: caricamento da NVS o da MultiViewer fatto dal task,
- * fuori dal lock dei dati */
+/* circuit outline: loading from NVS or from MultiViewer done by the task,
+ * outside the data lock */
 static volatile uint16_t s_trkDaCaricare = 0;
 static uint32_t          s_trkRiprovaMs  = 0;
 
 /* ===========================================================================
- *  Socket: lettura con timeout
+ *  Socket: read with timeout
  * ========================================================================= */
 static bool leggiEsatti(NetworkClientSecure &c, uint8_t *buf, size_t n, uint32_t timeoutMs)
 {
@@ -123,7 +123,7 @@ static bool negozia()
     c.setInsecure();
     c.setTimeout(10);
     if (!c.connect(HOST, 443)) {
-        Serial.println("[F1LIVE] negotiate: connessione TLS fallita");
+        Serial.println("[F1LIVE] negotiate: TLS connection failed");
         return false;
     }
     c.print("POST /signalrcore/negotiate?negotiateVersion=1 HTTP/1.1\r\n"
@@ -178,7 +178,7 @@ static bool negozia()
                 resto -= (long)blocco;
             }
             if (resto < 0) break;
-            leggiRiga(c, riga, sizeof(riga), 5000);   /* CRLF dopo il blocco */
+            leggiRiga(c, riga, sizeof(riga), 5000);   /* CRLF after the block */
         }
     } else {
         const uint32_t t0 = millis();
@@ -197,7 +197,7 @@ static bool negozia()
 
     JsonDocument doc(PSRAM_JSON);
     if (deserializeJson(doc, body, DeserializationOption::NestingLimit(40))) {
-        Serial.println("[F1LIVE] negotiate: JSON non valido");
+        Serial.println("[F1LIVE] negotiate: invalid JSON");
         return false;
     }
     const char *tok = doc["connectionToken"] | (doc["connectionId"] | "");
@@ -246,7 +246,7 @@ static bool inviaTesto(const char *s)
 
 static void chiudi()
 {
-    if (s_connesso) Serial.println("[F1LIVE] disconnesso");
+    if (s_connesso) Serial.println("[F1LIVE] disconnected");
     s_cli.stop();
     s_connesso = false;
     s_len = 0;
@@ -263,7 +263,7 @@ static bool connetti()
     if (!reteLock(60000)) return false;
     const bool ok = connettiInterno();
     reteUnlock();
-    if (!ok) Serial.printf("[F1LIVE] RAM interna libera %u\n", (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+    if (!ok) Serial.printf("[F1LIVE] free internal RAM %u\n", (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
     return ok;
 }
 
@@ -274,7 +274,7 @@ static bool connettiInterno()
     s_cli.setInsecure();
     s_cli.setTimeout(10);
     if (!s_cli.connect(HOST, 443)) {
-        Serial.println("[F1LIVE] websocket: connessione TLS fallita");
+        Serial.println("[F1LIVE] websocket: TLS connection failed");
         return false;
     }
 
@@ -308,7 +308,7 @@ static bool connettiInterno()
 
     char riga[300];
     if (!leggiRiga(s_cli, riga, sizeof(riga), 10000) || strstr(riga, " 101") == nullptr) {
-        Serial.printf("[F1LIVE] upgrade rifiutato: %s\n", riga);
+        Serial.printf("[F1LIVE] upgrade refused: %s\n", riga);
         s_cli.stop();
         return false;
     }
@@ -324,11 +324,11 @@ static bool connettiInterno()
         return false;
     }
     if (dataLock(500)) { g_f1live->connesso = true; g_f1live->versione++; dataUnlock(); }
-    Serial.println("[F1LIVE] collegato al live timing");
+    Serial.println("[F1LIVE] connected to the live timing");
     return true;
 }
 
-/* 1 = messaggio completo in s_msg, 0 = niente di nuovo, -1 = connessione chiusa */
+/* 1 = complete message in s_msg, 0 = nothing new, -1 = connection closed */
 static int leggiFrame()
 {
     if (s_cli.available() <= 0) return s_cli.connected() ? 0 : -1;
@@ -364,7 +364,7 @@ static int leggiFrame()
     if (op == 0x1 || op == 0x2) { s_len = 0; s_overflow = false; }
 
     if (s_overflow || s_len + len + 1 > MSG_CAP) {
-        /* troppo grande: lo scarto senza perdere la sincronia dei frame */
+        /* too large: discard it without losing frame sync */
         s_overflow = true;
         uint8_t tmp[512];
         uint64_t resto = len;
@@ -381,7 +381,7 @@ static int leggiFrame()
 
     if (!fin) return 0;
     if (s_overflow) {
-        Serial.println("[F1LIVE] messaggio troppo grande, scartato");
+        Serial.println("[F1LIVE] message too large, discarded");
         s_overflow = false;
         s_len = 0;
         return 0;
@@ -391,15 +391,15 @@ static int leggiFrame()
 }
 
 /* ===========================================================================
- *  3. Applicazione dei dati (con dataLock preso)
+ *  3. Applying the data (with dataLock taken)
  * ========================================================================= */
 static void nomeSessione(const char *en, char *out, size_t n)
 {
-    if (strcmp(en, "Race") == 0)                    snprintf(out, n, "Gara");
-    else if (strcmp(en, "Qualifying") == 0)         snprintf(out, n, "Qualifiche");
+    if (strcmp(en, "Race") == 0)                    snprintf(out, n, "Race");
+    else if (strcmp(en, "Qualifying") == 0)         snprintf(out, n, "Qualifying");
     else if (strncmp(en, "Sprint Q", 8) == 0 ||
              strncmp(en, "Sprint S", 8) == 0)       snprintf(out, n, "Sprint Q.");
-    else if (strncmp(en, "Practice ", 9) == 0)      snprintf(out, n, "Libere %s", en + 9);
+    else if (strncmp(en, "Practice ", 9) == 0)      snprintf(out, n, "Practice %s", en + 9);
     else                                            asciiFold(en, out, n);
 }
 
@@ -466,16 +466,16 @@ static void applicaStato(F1Live &L, JsonObject o, bool snapshot)
     if (!snapshot && strcmp(nuovo, L.stato) != 0) {
         if (strcmp(nuovo, "Started") == 0) {
             notifySchermata(0, 0), notifica(NOT_F1, strcmp(L.tipo, "Race") == 0 ? SND_F1_PARTENZA : SND_F1_PASSAGGIO,
-                     "F1  %s - %s: semaforo verde!", L.meeting, L.sessione);
+                     "F1  %s - %s: green light!", L.meeting, L.sessione);
         } else if (strcmp(nuovo, "Finished") == 0) {
             if (strcmp(L.tipo, "Race") == 0 && L.n > 0 && L.p[0].pos == 1) {
-                notifySchermata(0, 0), notifica(NOT_F1, SND_BLOCK_FOUND, "F1  Bandiera a scacchi: vince %s (%s)",
+                notifySchermata(0, 0), notifica(NOT_F1, SND_BLOCK_FOUND, "F1  Chequered flag: %s wins (%s)",
                          L.p[0].cognome[0] ? L.p[0].cognome : L.p[0].tla, L.p[0].team);
             } else {
-                notifySchermata(0, 0), notifica(NOT_F1, SND_COUNT, "F1  Fine %s", L.sessione);
+                notifySchermata(0, 0), notifica(NOT_F1, SND_COUNT, "F1  End of %s", L.sessione);
             }
         } else if (strcmp(nuovo, "Aborted") == 0) {
-            notifySchermata(0, 0), notifica(NOT_F1, SND_TEMP_ALARM, "F1  Sessione sospesa - BANDIERA ROSSA");
+            notifySchermata(0, 0), notifica(NOT_F1, SND_TEMP_ALARM, "F1  Session suspended - RED FLAG");
         }
     }
     snprintf(L.stato, sizeof(L.stato), "%s", nuovo);
@@ -487,11 +487,11 @@ static void applicaPista(F1Live &L, JsonObject o, bool snapshot)
     const uint8_t nuovo = (uint8_t)atoi(o["Status"] | "1");
     if (!snapshot && nuovo != L.pista) {
         switch (nuovo) {
-            case 4: notifySchermata(0, 0), notifica(NOT_F1, SND_TEMP_ALARM, "F1  SAFETY CAR in pista - giro %u", L.giro); break;
-            case 5: notifySchermata(0, 0), notifica(NOT_F1, SND_TEMP_ALARM, "F1  BANDIERA ROSSA - giro %u", L.giro); break;
-            case 6: notifySchermata(0, 0), notifica(NOT_F1, SND_TEMP_ALARM, "F1  VIRTUAL SAFETY CAR - giro %u", L.giro); break;
+            case 4: notifySchermata(0, 0), notifica(NOT_F1, SND_TEMP_ALARM, "F1  SAFETY CAR on track - lap %u", L.giro); break;
+            case 5: notifySchermata(0, 0), notifica(NOT_F1, SND_TEMP_ALARM, "F1  RED FLAG - lap %u", L.giro); break;
+            case 6: notifySchermata(0, 0), notifica(NOT_F1, SND_TEMP_ALARM, "F1  VIRTUAL SAFETY CAR - lap %u", L.giro); break;
             case 1:
-                if (L.pista >= 4) notifySchermata(0, 0), notifica(NOT_OK, SND_F1_PASSAGGIO, "F1  Bandiera verde, si riparte");
+                if (L.pista >= 4) notifySchermata(0, 0), notifica(NOT_OK, SND_F1_PASSAGGIO, "F1  Green flag, racing resumes");
                 break;
             default: break;
         }
@@ -547,7 +547,7 @@ static void applicaTiming(F1Live &L, JsonObject o, bool snapshot)
         }
         if (!d["NumberOfLaps"].isNull()) {
             const uint8_t g = (uint8_t)(d["NumberOfLaps"] | 0);
-            /* un giro in piu' = passaggio sul traguardo adesso */
+            /* one more lap = crossing the line now */
             if (!snapshot && g > p->giri) p->passaggioMs = millis() | 1;
             p->giri = g;
         }
@@ -556,7 +556,7 @@ static void applicaTiming(F1Live &L, JsonObject o, bool snapshot)
         if (!d["Retired"].isNull())          p->ritirato = d["Retired"] | false;
         if (!d["Stopped"].isNull())          p->fermo = d["Stopped"] | false;
 
-        /* giro migliore: BestLapTime (prove, gara) oppure BestLapTimes (qualifiche) */
+        /* best lap: BestLapTime (practice, race) or BestLapTimes (qualifying) */
         if (!d["BestLapTime"].isNull()) {
             char t[12] = "";
             copiaValore(d["BestLapTime"], t, sizeof(t));
@@ -579,19 +579,19 @@ static void applicaTiming(F1Live &L, JsonObject o, bool snapshot)
     }
     ordinaPiloti(L);
 
-    /* cambio di leader in gara (dal secondo giro: alla partenza e' normale) */
+    /* leader change in the race (from the second lap: at the start it is normal) */
     bool nuovoLeader = false;
     if (L.n > 0 && L.p[0].pos == 1) {
         if (!snapshot && gara && L.giro >= 2 && s_leader[0] != 0 && strcmp(s_leader, L.p[0].num) != 0) {
-            notifySchermata(0, 0), notifica(NOT_F1, SND_F1_PASSAGGIO, "F1  Nuovo leader: %s %s - giro %u/%u",
+            notifySchermata(0, 0), notifica(NOT_F1, SND_F1_PASSAGGIO, "F1  New leader: %s %s - lap %u/%u",
                      L.p[0].tla, L.p[0].cognome, L.giro, L.giriTot);
             nuovoLeader = true;
         }
         snprintf(s_leader, sizeof(s_leader), "%s", L.p[0].num);
     }
 
-    /* sorpasso per il 2. o 3. posto: rombo di passaggio, al massimo uno ogni
-     * 30 s per non trasformare il pannello in una pista nei primi giri */
+    /* overtake for 2nd or 3rd place: passing roar, at most one every
+     * 30 s so the panel does not turn into a race track in the first laps */
     static char     s_podio[2][4] = { "", "" };
     static uint32_t s_ultimoPodioMs = 0;
     if (L.n >= 3 && L.p[1].pos == 2 && L.p[2].pos == 3) {
@@ -600,7 +600,7 @@ static void applicaTiming(F1Live &L, JsonObject o, bool snapshot)
             (s_ultimoPodioMs == 0 || millis() - s_ultimoPodioMs >= 30000)) {
             const bool secondo = strcmp(s_podio[0], L.p[1].num) != 0;
             const F1LivePilota &chi = secondo ? L.p[1] : L.p[2];
-            notifySchermata(0, 0), notifica(NOT_F1, SND_F1_PASSAGGIO, "F1  %s %s sale in P%u - giro %u/%u   (podio: %s %s %s)",
+            notifySchermata(0, 0), notifica(NOT_F1, SND_F1_PASSAGGIO, "F1  %s %s up to P%u - lap %u/%u   (podium: %s %s %s)",
                      chi.tla, chi.cognome, secondo ? 2 : 3, L.giro, L.giriTot,
                      L.p[0].tla, L.p[1].tla, L.p[2].tla);
             s_ultimoPodioMs = millis() | 1;
@@ -613,7 +613,7 @@ static void applicaTiming(F1Live &L, JsonObject o, bool snapshot)
 static void applicaMessaggi(F1Live &L, JsonVariant v)
 {
     JsonVariant m = v["Messages"];
-    /* JsonObject si puo' riassegnare (e' un riferimento), JsonVariant no */
+    /* JsonObject can be reassigned (it is a reference), JsonVariant cannot */
     JsonObject ultimo;
     if (m.is<JsonArray>()) {
         JsonArray a = m.as<JsonArray>();
@@ -629,7 +629,7 @@ static void applicaMessaggi(F1Live &L, JsonVariant v)
     else          snprintf(L.messaggio, sizeof(L.messaggio), "%s", testo);
 }
 
-/* ---- gomme (TimingAppData) ---------------------------------------------- */
+/* ---- tyres (TimingAppData) ---------------------------------------------- */
 static char letteraGomma(const char *c)
 {
     if (c == nullptr) return '?';
@@ -644,7 +644,7 @@ static char letteraGomma(const char *c)
 static void applicaStint(F1LivePilota *p, int idx, JsonVariant o)
 {
     if (idx < 0 || !o.is<JsonObject>()) return;
-    if (p->gomma != 0 && idx < p->stint) return;          /* stint vecchio */
+    if (p->gomma != 0 && idx < p->stint) return;          /* old stint */
     if (idx > p->stint || p->gomma == 0) {
         p->stint = (uint8_t)idx;
         if (p->gomma == 0) p->gomma = '?';
@@ -672,13 +672,13 @@ static void applicaGomme(F1Live &L, JsonObject o)
     }
 }
 
-/* ---- sagoma del circuito ---------------------------------------------------
- * Fonte: MultiViewer (api.multiviewer.app), la stessa usata dall'omonima app
- * per il live timing. Restituisce x[], y[] e, per molti circuiti, il tempo di
- * riferimento dal traguardo a ogni punto (trackPositionTime): serve a piazzare
- * le auto sulla pista partendo dal loro ultimo passaggio sul traguardo.
- * Salvata in NVS (namespace "sport_trk2", chiave "c<circuito>"):
- * blob = n, tempiVeri, tGiro, x[n], y[n], t[n] (tutti a 16 bit).            */
+/* ---- circuit outline -------------------------------------------------------
+ * Source: MultiViewer (api.multiviewer.app), the same one used by the app of the
+ * same name for live timing. It returns x[], y[] and, for many circuits, the
+ * reference time from the finish line to each point (trackPositionTime): used to place
+ * the cars on the track starting from their last crossing of the line.
+ * Saved in NVS (namespace "sport_trk2", key "c<circuit>"):
+ * blob = n, tempiVeri, tGiro, x[n], y[n], t[n] (all 16-bit).                */
 static bool caricaDaNvs(uint16_t chiave, Tracciato &T)
 {
     static int16_t buf[3 + 3 * TRK_MAX];
@@ -722,7 +722,7 @@ static void salvaInNvs(const Tracciato &T)
     }
 }
 
-/* scarica la sagoma; true se riuscito */
+/* downloads the outline; true if successful */
 static bool scaricaDaMultiViewer(uint16_t chiave, Tracciato &T)
 {
     time_t ora = time(nullptr);
@@ -748,7 +748,7 @@ static bool scaricaDaMultiViewer(uint16_t chiave, Tracciato &T)
         const size_t tot = ax.size();
         if (tot < 10 || ay.size() != tot) continue;
         const bool tempi = at.size() == tot;
-        const size_t passo = (tot + TRK_MAX - 1) / TRK_MAX;     /* sfoltisce oltre 800 punti */
+        const size_t passo = (tot + TRK_MAX - 1) / TRK_MAX;     /* thins out beyond 800 points */
         uint16_t n = 0;
         float dist = 0;
         int32_t px = 0, py = 0;
@@ -758,7 +758,7 @@ static bool scaricaDaMultiViewer(uint16_t chiave, Tracciato &T)
             T.x[n] = (int16_t)constrain(x, -32000, 32000);
             T.y[n] = (int16_t)constrain(y, -32000, 32000);
             T.t[n] = tempi ? (uint16_t)lroundf((at[i] | 0.0f) * 100.0f) : (uint16_t)0;
-            if (!tempi) T.t[n] = (uint16_t)fminf(dist / 4.0f, 65000.0f);  /* distanza in 40 cm */
+            if (!tempi) T.t[n] = (uint16_t)fminf(dist / 4.0f, 65000.0f);  /* distance in 40 cm units */
             px = x; py = y;
             n++;
         }
@@ -767,8 +767,8 @@ static bool scaricaDaMultiViewer(uint16_t chiave, Tracciato &T)
         T.tGiro = T.t[n - 1];
         if (T.tGiro == 0) T.tGiro = 1;
         T.completo = true;
-        Serial.printf("[F1LIVE] sagoma %s (circuito %u, %d) da MultiViewer: %u punti%s\n",
-                      doc["circuitName"] | "?", chiave, anno, n, tempi ? ", con tempi" : "");
+        Serial.printf("[F1LIVE] outline %s (circuit %u, %d) from MultiViewer: %u points%s\n",
+                      doc["circuitName"] | "?", chiave, anno, n, tempi ? ", with times" : "");
         return true;
     }
     return false;
@@ -776,18 +776,18 @@ static bool scaricaDaMultiViewer(uint16_t chiave, Tracciato &T)
 
 static void caricaTracciato(uint16_t chiave)
 {
-    static Tracciato tmp;           /* ~5 KB, fuori dallo stack del task */
+    static Tracciato tmp;           /* ~5 KB, off the task stack */
     memset(&tmp, 0, sizeof(tmp));
     tmp.chiave = chiave;
     bool ok = caricaDaNvs(chiave, tmp);
     if (ok) {
-        Serial.printf("[F1LIVE] circuito %u: sagoma caricata da NVS (%u punti)\n", chiave, tmp.n);
+        Serial.printf("[F1LIVE] circuit %u: outline loaded from NVS (%u points)\n", chiave, tmp.n);
     } else {
         ok = scaricaDaMultiViewer(chiave, tmp);
         if (ok) salvaInNvs(tmp);
     }
     if (!ok) {
-        Serial.printf("[F1LIVE] circuito %u: sagoma non disponibile, riprovo fra 10 min\n", chiave);
+        Serial.printf("[F1LIVE] circuit %u: outline not available, retrying in 10 min\n", chiave);
         s_trkDaCaricare = chiave;
         s_trkRiprovaMs = millis() | 1;
         return;
@@ -815,7 +815,7 @@ static void applica(const char *topic, JsonVariant v, bool snapshot)
     }
 }
 
-/* Divide il messaggio WebSocket nei record SignalR (separatore 0x1E) */
+/* Splits the WebSocket message into SignalR records (separator 0x1E) */
 static bool processa()
 {
     char *p = s_msg;
@@ -827,11 +827,11 @@ static bool processa()
             JsonDocument doc(PSRAM_JSON);
             if (!deserializeJson(doc, p, len, DeserializationOption::NestingLimit(40))) {
                 const int tipo = doc["type"] | 0;
-                if (tipo == 7) return false;           /* close dal server */
+                if (tipo == 7) return false;           /* close from the server */
                 if (tipo == 3 && strcmp(doc["invocationId"] | "", "0") == 0) {
                     JsonObject res = doc["result"];
                     if (!res.isNull() && dataLock(1000)) {
-                        /* stato completo: si riparte da zero */
+                        /* full state: start again from scratch */
                         F1Live &L = *g_f1live;
                         const bool conn = L.connesso;
                         const uint32_t ver = L.versione;
@@ -839,7 +839,7 @@ static bool processa()
                         L.connesso = conn;
                         L.versione = ver;
                         s_leader[0] = 0;
-                        /* l'ordine conta: prima la sessione, poi piloti e tempi */
+                        /* order matters: first the session, then drivers and times */
                         static const char *const ORDINE[] = {
                             "SessionInfo", "SessionStatus", "LapCount", "TrackStatus",
                             "DriverList", "TimingData", "RaceControlMessages",
@@ -850,7 +850,7 @@ static bool processa()
                         }
                         L.versione++;
                         L.aggMs = millis();
-                        Serial.printf("[F1LIVE] stato: %s - %s (%s), %u piloti, giro %u/%u\n",
+                        Serial.printf("[F1LIVE] state: %s - %s (%s), %u drivers, lap %u/%u\n",
                                       L.meeting, L.sessione, L.stato, L.n, L.giro, L.giriTot);
                         dataUnlock();
                     }
@@ -873,7 +873,7 @@ static bool processa()
 }
 
 /* ===========================================================================
- *  4. Quando restare collegati
+ *  4. When to stay connected
  * ========================================================================= */
 static bool inFinestra()
 {
@@ -886,7 +886,7 @@ static bool inFinestra()
             ora >= L.inizio - (time_t)F1_LIVE_MARGINE_S && ora <= L.fine + (time_t)F1_LIVE_MARGINE_S) si = true;
         for (uint8_t i = 0; i < g_f1->nSessioni && !si; ++i) {
             const F1Sessione &s = g_f1->sessioni[i];
-            const time_t durata = strcmp(s.nome, "GARA") == 0 ? 3 * 3600 : 90 * 60;
+            const time_t durata = strcmp(s.nome, "RACE") == 0 ? 3 * 3600 : 90 * 60;
             if (ora >= s.inizio - (time_t)F1_LIVE_MARGINE_S && ora <= s.inizio + durata + (time_t)F1_LIVE_MARGINE_S) si = true;
         }
         dataUnlock();
@@ -899,7 +899,7 @@ void f1LiveTask(void *arg)
     (void)arg;
     s_msg = static_cast<char *>(heap_caps_malloc(MSG_CAP, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     if (s_msg == nullptr) {
-        Serial.println("[F1LIVE] buffer PSRAM non disponibile, live disattivato");
+        Serial.println("[F1LIVE] PSRAM buffer not available, live disabled");
         vTaskDelete(nullptr);
         return;
     }
@@ -910,7 +910,7 @@ void f1LiveTask(void *arg)
     uint32_t ultimoMsg = 0;
     uint32_t connessoDa = 0;
 
-    /* lascia partire prima calcio e Jolpica */
+    /* let football and Jolpica start first */
     vTaskDelay(pdMS_TO_TICKS(15000));
 
     while (true) {
@@ -920,7 +920,7 @@ void f1LiveTask(void *arg)
             continue;
         }
 
-        /* sagoma del circuito (anche a sessione chiusa) */
+        /* circuit outline (even with the session closed) */
         if (s_trkDaCaricare != 0 && (s_trkRiprovaMs == 0 || millis() - s_trkRiprovaMs >= 600000)) {
             const uint16_t k = s_trkDaCaricare;
             s_trkDaCaricare = 0;
@@ -935,14 +935,14 @@ void f1LiveTask(void *arg)
                     connessoDa = ultimoMsg = ultimoPing = millis();
                 } else {
                     attesa = inFinestra() ? F1_LIVE_RETRY_MS : F1_LIVE_CONTROLLO_MS;
-                    Serial.printf("[F1LIVE] connessione fallita, riprovo fra %lu s\n", (unsigned long)(attesa / 1000));
+                    Serial.printf("[F1LIVE] connection failed, retrying in %lu s\n", (unsigned long)(attesa / 1000));
                 }
             }
             vTaskDelay(pdMS_TO_TICKS(500));
             continue;
         }
 
-        /* svuota quello che e' arrivato */
+        /* drain what has arrived */
         int giri = 0;
         while (giri++ < 50) {
             const int r = leggiFrame();
@@ -966,20 +966,20 @@ void f1LiveTask(void *arg)
             ultimoLog = millis();
             if (dataLock(200)) {
                 const F1Live &L = *g_f1live;
-                Serial.printf("[F1LIVE] %s %s: giro %u/%u, pista %u, leader %s, aggiornamenti %lu\n",
+                Serial.printf("[F1LIVE] %s %s: lap %u/%u, track %u, leader %s, updates %lu\n",
                               L.sessione, L.stato, L.giro, L.giriTot, L.pista,
                               L.n > 0 ? L.p[0].tla : "-", (unsigned long)L.versione);
                 dataUnlock();
             }
         }
         if (millis() - ultimoMsg >= 60000) {
-            Serial.println("[F1LIVE] nessun messaggio da 60 s, riconnetto");
+            Serial.println("[F1LIVE] no message for 60 s, reconnecting");
             chiudi();
             ultimoTentativo = millis();
             attesa = 2000;
             continue;
         }
-        /* fuori sessione: letto lo stato si chiude e si ricontrolla piu' tardi */
+        /* outside sessions: once the state is read, close and check again later */
         if (millis() - connessoDa >= 45000 && !inFinestra()) {
             chiudi();
             ultimoTentativo = millis();

@@ -1,14 +1,14 @@
 /* ============================================================================
- *  Ui - tema, geometria e API delle schermate
+ *  Ui - theme, geometry and screen API
  *
- *  GEOMETRIA (schermo 1024 x 600):
+ *  GEOMETRY (1024 x 600 screen):
  *
- *    header      y   0 ..  46    titolo, orologio, WiFi
- *    banner      y  46 ..  76    avvisi (gol, bandiere) oppure riga di stato
- *    tab bar     y  76 .. 134    [F1][CALCIO]  + sotto-schede della sezione
- *                                F1:     5 schede 146 px, passo 150 da x=266
- *                                CALCIO: 6 schede 119 px, passo 125 da x=266
- *    contenuto   y 134 .. 600    alto 466, area utile 1008 x 450 da (8,8)
+ *    header      y   0 ..  46    title, clock, WiFi
+ *    banner      y  46 ..  76    alerts (goals, flags) or status line
+ *    tab bar     y  76 .. 134    [F1][FOOTBALL]  + sub-tabs of the section
+ *                                F1:       5 tabs 146 px, step 150 from x=266
+ *                                FOOTBALL: 6 tabs 119 px, step 125 from x=266
+ *    content     y 134 .. 600    466 high, usable area 1008 x 450 from (8,8)
  * ========================================================================== */
 #pragma once
 
@@ -16,7 +16,7 @@
 #include "AppConfig.h"
 #include "DataModel.h"
 
-/* ---- geometria ------------------------------------------------------------ */
+/* ---- geometry ------------------------------------------------------------- */
 #define UI_W            1024
 #define UI_H            600
 #define UI_HEADER_H     46
@@ -33,9 +33,9 @@
 #define UI_TAB_Y        6
 #define UI_TAB_H        46
 #define UI_MAIN_F1_X    8
-#define UI_MAIN_F1_W    104
-#define UI_MAIN_CAL_X   118
-#define UI_MAIN_CAL_W   134
+#define UI_MAIN_F1_W    88
+#define UI_MAIN_CAL_X   102
+#define UI_MAIN_CAL_W   150
 #define UI_SUB_X0       266
 #define UI_SUB_F1_W     146
 #define UI_SUB_F1_STEP  150
@@ -63,31 +63,31 @@
 #define C_MUTED     lv_color_hex(0x8B949E)
 #define C_DARK      lv_color_hex(0x0D1117)
 
-/* ---- helper condivisi ------------------------------------------------------ */
+/* ---- shared helpers -------------------------------------------------------- */
 lv_obj_t *uiCard(lv_obj_t *parent, lv_coord_t x, lv_coord_t y, lv_coord_t w, lv_coord_t h);
 lv_obj_t *uiLabel(lv_obj_t *parent, const char *txt, const lv_font_t *font, lv_color_t color);
-/* label a larghezza fissa con allineamento e "..." se il testo non ci sta */
+/* fixed-width label with alignment and "..." if the text does not fit */
 lv_obj_t *uiCol(lv_obj_t *parent, lv_coord_t x, lv_coord_t y, lv_coord_t w,
                 const lv_font_t *font, lv_color_t color, lv_text_align_t align);
-/* box colorato (barra del team, chip) */
+/* coloured box (team bar, chip) */
 lv_obj_t *uiBox(lv_obj_t *parent, lv_coord_t x, lv_coord_t y, lv_coord_t w, lv_coord_t h, lv_color_t color);
-/* cambia il testo solo se diverso: evita ridisegni inutili */
+/* changes the text only if different: avoids useless redraws */
 void      uiSetText(lv_obj_t *label, const char *txt);
 void      uiSetColor(lv_obj_t *label, lv_color_t c);
-/* colore della mescola: S rosso, M giallo, H bianco, I verde, W blu */
+/* compound colour: S red, M yellow, H white, I green, W blue */
 lv_color_t uiColoreGomma(char g);
 
-/* ---- schermate ------------------------------------------------------------- */
+/* ---- screens --------------------------------------------------------------- */
 void uiF1Create(lv_obj_t *pagine[UI_F1_PAGINE]);
-/* forza = true al cambio scheda */
+/* forza = true on tab change */
 void uiF1Update(uint8_t pagina, bool forza);
-/* testo di stato per il banner quando non ci sono avvisi */
+/* status text for the banner when there are no alerts */
 void uiF1Stato(char *out, size_t n);
 
 void uiCalcioCreate(lv_obj_t *pagina);
 void uiCalcioUpdate(bool forza);
 void uiCalcioStato(char *out, size_t n);
-/* chiude la scheda dettaglio partita, se aperta */
+/* closes the match detail card, if open */
 void uiCalcioChiudiDettaglio();
 
 /* ---- framework -------------------------------------------------------------- */

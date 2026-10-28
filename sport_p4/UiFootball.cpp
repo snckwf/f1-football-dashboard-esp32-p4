@@ -1,10 +1,10 @@
 /* ============================================================================
- *  UiCalcio - una scheda per competizione
+ *  UiFootball - one tab per competition
  *
- *  Lista partite raggruppate per giorno (scorrevole, si apre su oggi).
- *  Serie A: lista a sinistra, classifica a destra.
- *  In diretta: riga bordata di rosso col minuto; dopo un gol il punteggio
- *  resta evidenziato in giallo per due minuti.
+ *  Match list grouped by day (scrollable, opens on today).
+ *  Serie A: list on the left, standings on the right.
+ *  Live: row with a red border and the minute; after a goal the score
+ *  stays highlighted in yellow for two minutes.
  * ========================================================================== */
 #include "Ui.h"
 #include "esp_heap_caps.h"
@@ -26,7 +26,7 @@ static lv_obj_t *s_class  = nullptr;
 struct RigaClass { lv_obj_t *zona, *pos, *squadra, *g, *dr, *pt; };
 static RigaClass s_cr[20];
 
-static Competizione *s_copia = nullptr;     /* copia locale, PSRAM */
+static Competizione *s_copia = nullptr;     /* local copy, PSRAM */
 static Classifica    s_cl;
 static uint8_t  s_compMostrata = 255;
 static uint32_t s_ver = 0xFFFFFFFF;
@@ -34,7 +34,7 @@ static uint8_t  s_flash = 0xFF;
 static uint32_t s_classVer = 0xFFFFFFFF;
 
 /* ---------------------------------------------------------------------------
- *  Classifica
+ *  Standings
  * ------------------------------------------------------------------------- */
 static void creaClassifica(lv_obj_t *pg)
 {
@@ -42,13 +42,13 @@ static void creaClassifica(lv_obj_t *pg)
     const lv_coord_t W = CLASS_W - 16;
     lv_obj_t *h;
     h = uiCol(s_class, 6, 0, 150, &lv_font_montserrat_14, C_MUTED, LV_TEXT_ALIGN_LEFT);
-    lv_label_set_text(h, "CLASSIFICA");
+    lv_label_set_text(h, "STANDINGS");
     h = uiCol(s_class, W - 138, 0, 30, &lv_font_montserrat_14, C_MUTED, LV_TEXT_ALIGN_RIGHT);
-    lv_label_set_text(h, "G");
+    lv_label_set_text(h, "P");
     h = uiCol(s_class, W - 102, 0, 42, &lv_font_montserrat_14, C_MUTED, LV_TEXT_ALIGN_RIGHT);
-    lv_label_set_text(h, "DR");
+    lv_label_set_text(h, "GD");
     h = uiCol(s_class, W - 52, 0, 52, &lv_font_montserrat_14, C_MUTED, LV_TEXT_ALIGN_RIGHT);
-    lv_label_set_text(h, "PT");
+    lv_label_set_text(h, "PTS");
 
     for (uint8_t r = 0; r < 20; ++r) {
         RigaClass &R = s_cr[r];
@@ -67,7 +67,7 @@ static lv_color_t coloreZona(uint8_t pos, uint8_t n)
     if (pos >= 1 && pos <= 4) return C_BLUE;     /* Champions League  */
     if (pos == 5)             return C_ORANGE;   /* Europa League     */
     if (pos == 6)             return C_GREEN;    /* Conference League */
-    if (n >= 18 && pos > n - 3) return C_RED;    /* retrocessione     */
+    if (n >= 18 && pos > n - 3) return C_RED;    /* relegation        */
     return C_BORDER;
 }
 
@@ -83,7 +83,7 @@ static void aggiornaClassifica(bool forza)
     for (uint8_t r = 0; r < 20; ++r) {
         RigaClass &R = s_cr[r];
         if (r >= s_cl.n) {
-            uiSetText(R.pos, ""); uiSetText(R.squadra, r == 0 ? "in attesa dei dati..." : "");
+            uiSetText(R.pos, ""); uiSetText(R.squadra, r == 0 ? "waiting for data..." : "");
             uiSetText(R.g, ""); uiSetText(R.dr, ""); uiSetText(R.pt, "");
             lv_obj_set_style_bg_color(R.zona, C_CARD, 0);
             continue;
@@ -103,7 +103,7 @@ static void aggiornaClassifica(bool forza)
 }
 
 /* ---------------------------------------------------------------------------
- *  Lista partite
+ *  Match list
  * ------------------------------------------------------------------------- */
 static uint8_t contaFlash(const Competizione &cp)
 {
@@ -114,7 +114,7 @@ static uint8_t contaFlash(const Competizione &cp)
     return n;
 }
 
-/* id ESPN delle righe a schermo: l'indice viaggia come user_data dell'evento */
+/* ESPN id of the rows on screen: the index travels as the event user_data */
 static char s_idRighe[CALCIO_MAX_PARTITE][16];
 static void apriDettaglio(const char *id);
 
@@ -124,7 +124,7 @@ static void rigaClickCb(lv_event_t *e)
     if (i < CALCIO_MAX_PARTITE && s_idRighe[i][0]) apriDettaglio(s_idRighe[i]);
 }
 
-/* quadratino rosso con il numero di espulsi */
+/* small red square with the number of players sent off */
 static void badgeRosso(lv_obj_t *r, lv_coord_t x, uint8_t n)
 {
     if (n == 0) return;
@@ -151,12 +151,12 @@ static lv_obj_t *creaRiga(lv_obj_t *lista, lv_coord_t y, lv_coord_t W, const Par
     lv_obj_set_style_border_color(r, live ? C_RED : C_BORDER, 0);
     lv_obj_set_style_border_width(r, live ? 2 : 1, 0);
     lv_obj_remove_flag(r, LV_OBJ_FLAG_SCROLLABLE);
-    /* tocco sulla riga = scheda dettaglio (lo scorrimento della lista annulla il clic) */
+    /* tap on the row = detail card (scrolling the list cancels the click) */
     lv_obj_add_flag(r, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_bg_color(r, C_CARD2, LV_STATE_PRESSED);
     lv_obj_add_event_cb(r, rigaClickCb, LV_EVENT_CLICKED, (void *)(uintptr_t)indice);
 
-    /* ---- chip: ora / minuto / stato ---- */
+    /* ---- chip: time / minute / status ---- */
     char buf[48];
     lv_color_t chipBg = C_CARD2, chipFg = C_TEXT;
     switch (m.stato) {
@@ -169,10 +169,10 @@ static lv_obj_t *creaRiga(lv_obj_t *lista, lv_coord_t y, lv_coord_t W, const Par
     lv_obj_t *lc = uiLabel(chip, buf, m.stato == 'p' ? &lv_font_montserrat_18 : &lv_font_montserrat_14, chipFg);
     lv_obj_center(lc);
 
-    /* ---- squadre e punteggio ---- */
+    /* ---- teams and score ---- */
     const lv_coord_t SC = 104;
     const lv_coord_t notaW = W > 800 ? 220 : 0;
-    /* 22 px per lato restano liberi per il quadratino delle espulsioni */
+    /* 22 px per side are left free for the sent-off square */
     const lv_coord_t nomeW = (W - 92 - SC - 52 - notaW - (notaW ? 8 : 0) - 8) / 2;
     const lv_coord_t xCasa = 92;
     const lv_coord_t xSc   = xCasa + nomeW + 26;
@@ -221,13 +221,13 @@ static void costruisciLista(const Competizione &cp, bool vaiAOggi)
     const lv_coord_t scrollPrima = lv_obj_get_scroll_y(s_lista);
     lv_obj_clean(s_lista);
 
-    const lv_coord_t W = lv_obj_get_width(s_lista) - 14;   /* spazio per la barra di scorrimento */
+    const lv_coord_t W = lv_obj_get_width(s_lista) - 14;   /* room for the scrollbar */
 
     if (cp.n == 0) {
         lv_obj_t *l = uiCol(s_lista, 0, 120, W, &lv_font_montserrat_22, C_MUTED, LV_TEXT_ALIGN_CENTER);
-        if (!cp.caricata && cp.errore[0] == 0) lv_label_set_text(l, "Caricamento...");
-        else if (cp.errore[0])                 lv_label_set_text_fmt(l, "Dati non disponibili (%s)", cp.errore);
-        else                                   lv_label_set_text(l, "Nessuna partita in programma");
+        if (!cp.caricata && cp.errore[0] == 0) lv_label_set_text(l, "Loading...");
+        else if (cp.errore[0])                 lv_label_set_text_fmt(l, "Data not available (%s)", cp.errore);
+        else                                   lv_label_set_text(l, "No matches scheduled");
         return;
     }
 
@@ -242,8 +242,8 @@ static void costruisciLista(const Competizione &cp, bool vaiAOggi)
         if (g != giornoPrec) {
             char data[24], t[48];
             fmtGiorno(m.inizio, data, sizeof(data));
-            if (g == oggi)          snprintf(t, sizeof(t), "OGGI  -  %s", data);
-            else if (g == oggi + 1) snprintf(t, sizeof(t), "Domani  -  %s", data);
+            if (g == oggi)          snprintf(t, sizeof(t), "TODAY  -  %s", data);
+            else if (g == oggi + 1) snprintf(t, sizeof(t), "Tomorrow  -  %s", data);
             else                    snprintf(t, sizeof(t), "%s", data);
             lv_obj_t *h = uiCol(s_lista, 4, y + 6, W - 8, &lv_font_montserrat_16,
                                 g == oggi ? C_ORANGE : C_MUTED, LV_TEXT_ALIGN_LEFT);
@@ -257,7 +257,7 @@ static void costruisciLista(const Competizione &cp, bool vaiAOggi)
         creaRiga(s_lista, y, W, m, i);
         y += RIGA_PASSO;
     }
-    /* spazio in fondo per poter portare in alto anche l'ultimo giorno */
+    /* room at the bottom so the last day can also be brought to the top */
     lv_obj_t *fondo = uiBox(s_lista, 0, y, 10, 10, C_BG);
     (void)fondo;
 
@@ -267,11 +267,11 @@ static void costruisciLista(const Competizione &cp, bool vaiAOggi)
 }
 
 /* ---------------------------------------------------------------------------
- *  Scheda dettaglio di una partita
+ *  Detail card of a match
  *
- *    [ Casa      2 - 1      Ospite ]  [CHIUDI]
- *    [ minuto / stato  -  stadio  -  data     ]
- *    CRONACA (gol, cartellini, cambi)   STATISTICHE + FORMAZIONI
+ *    [ Home      2 - 1      Away   ]  [CLOSE]
+ *    [ minute / status  -  stadium  -  date   ]
+ *    TIMELINE (goals, cards, subs)      STATISTICS + LINE-UPS
  * ------------------------------------------------------------------------- */
 #define DET_TOP_H   92
 #define DET_COL_Y   (UI_PAD + DET_TOP_H + 8)
@@ -333,7 +333,7 @@ static void creaDettaglio(lv_obj_t *pg)
     lv_obj_set_style_border_width(b, 1, 0);
     lv_obj_set_style_shadow_width(b, 0, 0);
     lv_obj_add_event_cb(b, chiudiCb, LV_EVENT_CLICKED, nullptr);
-    lv_obj_t *l = uiLabel(b, LV_SYMBOL_CLOSE "  CHIUDI", &lv_font_montserrat_16, C_TEXT);
+    lv_obj_t *l = uiLabel(b, LV_SYMBOL_CLOSE "  CLOSE", &lv_font_montserrat_16, C_TEXT);
     lv_obj_center(l);
 
     s_detCron = colonnaScorrevole(s_detPag, UI_PAD, DET_SX_W);
@@ -363,9 +363,9 @@ static void costruisciDettaglio()
 
     char data[24] = "", ora[8] = "";
     if (d.inizio) { fmtGiorno(d.inizio, data, sizeof(data)); fmtOra(d.inizio, ora, sizeof(ora)); }
-    const char *stato = d.stato == 'i' ? (d.minuto[0] ? d.minuto : "IN CORSO") : (d.stato == 'f' ? "FINALE" : "DA GIOCARE");
+    const char *stato = d.stato == 'i' ? (d.minuto[0] ? d.minuto : "IN PROGRESS") : (d.stato == 'f' ? "FULL TIME" : "NOT STARTED");
     if (d.spettatori > 0)
-        snprintf(buf, sizeof(buf), "%s   -   %s   -   %s %s   -   %s   -   %lu spettatori", stato,
+        snprintf(buf, sizeof(buf), "%s   -   %s   -   %s %s   -   %s   -   %lu spectators", stato,
                  CALCIO_NOME[d.comp < CALCIO_COMP_COUNT ? d.comp : 0], data, ora, d.stadio, (unsigned long)d.spettatori);
     else
         snprintf(buf, sizeof(buf), "%s   -   %s   -   %s %s   -   %s", stato,
@@ -373,11 +373,11 @@ static void costruisciDettaglio()
     uiSetText(s_detInfo, buf);
     uiSetColor(s_detInfo, d.stato == 'i' ? C_RED : C_MUTED);
 
-    /* ---- cronaca ---- */
+    /* ---- timeline ---- */
     const lv_coord_t scCron = lv_obj_get_scroll_y(s_detCron);
     lv_obj_clean(s_detCron);
     const lv_coord_t WC = DET_SX_W - 16 - 12;
-    etichetta(s_detCron, 0, 0, WC, "CRONACA", &lv_font_montserrat_14, C_MUTED, LV_TEXT_ALIGN_LEFT);
+    etichetta(s_detCron, 0, 0, WC, "TIMELINE", &lv_font_montserrat_14, C_MUTED, LV_TEXT_ALIGN_LEFT);
     lv_obj_t *lc = etichetta(s_detCron, 100, 0, WC - 100, "", &lv_font_montserrat_14, C_CASA, LV_TEXT_ALIGN_RIGHT);
     lv_label_set_text_fmt(lc, "%s", d.casa);
     lv_obj_set_width(lc, (WC - 100) / 2 - 4);
@@ -386,9 +386,9 @@ static void costruisciDettaglio()
 
     lv_coord_t y = 26;
     if (!d.pronto) {
-        etichetta(s_detCron, 0, 60, WC, d.errore[0] ? d.errore : "Caricamento...", &lv_font_montserrat_20, C_MUTED, LV_TEXT_ALIGN_CENTER);
+        etichetta(s_detCron, 0, 60, WC, d.errore[0] ? d.errore : "Loading...", &lv_font_montserrat_20, C_MUTED, LV_TEXT_ALIGN_CENTER);
     } else if (d.nEv == 0) {
-        etichetta(s_detCron, 0, 60, WC, d.stato == 'p' ? "La partita non e' ancora iniziata" : "Nessun evento",
+        etichetta(s_detCron, 0, 60, WC, d.stato == 'p' ? "The match has not started yet" : "No events",
                   &lv_font_montserrat_20, C_MUTED, LV_TEXT_ALIGN_CENTER);
     }
     for (uint8_t i = 0; i < d.nEv; ++i) {
@@ -396,12 +396,12 @@ static void costruisciDettaglio()
         const char *sigla = "";
         lv_color_t sf = C_CARD2, tx = C_TEXT;
         switch (ev.tipo) {
-            case 'G': sigla = "GOL";  sf = C_GREEN;  tx = C_DARK; break;
-            case 'R': sigla = "RIG";  sf = C_GREEN;  tx = C_DARK; break;
-            case 'A': sigla = "AUT";  sf = C_ORANGE; tx = C_DARK; break;
-            case 'Y': sigla = "AMM";  sf = C_GOLD;   tx = C_DARK; break;
-            case 'X': sigla = "ESP";  sf = C_RED;    tx = C_TEXT; break;
-            case 'S': sigla = "SOST"; sf = C_CARD2;  tx = C_TEXT; break;
+            case 'G': sigla = "GOAL"; sf = C_GREEN;  tx = C_DARK; break;
+            case 'R': sigla = "PEN";  sf = C_GREEN;  tx = C_DARK; break;
+            case 'A': sigla = "OG";   sf = C_ORANGE; tx = C_DARK; break;
+            case 'Y': sigla = "YEL";  sf = C_GOLD;   tx = C_DARK; break;
+            case 'X': sigla = "RED";  sf = C_RED;    tx = C_TEXT; break;
+            case 'S': sigla = "SUB";  sf = C_CARD2;  tx = C_TEXT; break;
             default: break;
         }
         uiBox(s_detCron, 0, y + 2, 4, 26, ev.casa ? C_CASA : C_OSPITE);
@@ -420,21 +420,21 @@ static void costruisciDettaglio()
     lv_obj_update_layout(s_detCron);
     lv_obj_scroll_to_y(s_detCron, scCron, LV_ANIM_OFF);
 
-    /* ---- statistiche e formazioni ---- */
+    /* ---- statistics and line-ups ---- */
     const lv_coord_t scStat = lv_obj_get_scroll_y(s_detStat);
     lv_obj_clean(s_detStat);
     const lv_coord_t WS = DET_DX_W - 16 - 12;
-    etichetta(s_detStat, 0, 0, WS, "STATISTICHE", &lv_font_montserrat_14, C_MUTED, LV_TEXT_ALIGN_LEFT);
+    etichetta(s_detStat, 0, 0, WS, "STATISTICS", &lv_font_montserrat_14, C_MUTED, LV_TEXT_ALIGN_LEFT);
     y = 24;
     if (d.pronto && d.nStat == 0) {
-        etichetta(s_detStat, 0, y, WS, "Statistiche non disponibili", &lv_font_montserrat_16, C_MUTED, LV_TEXT_ALIGN_LEFT);
+        etichetta(s_detStat, 0, y, WS, "Statistics not available", &lv_font_montserrat_16, C_MUTED, LV_TEXT_ALIGN_LEFT);
         y += 30;
     }
     for (uint8_t i = 0; i < d.nStat; ++i) {
         etichetta(s_detStat, 0, y, 80, d.statCasa[i], &lv_font_montserrat_18, C_CASA, LV_TEXT_ALIGN_LEFT);
         etichetta(s_detStat, 80, y + 2, WS - 160, d.statNome[i], &lv_font_montserrat_14, C_TEXT, LV_TEXT_ALIGN_CENTER);
         etichetta(s_detStat, WS - 80, y, 80, d.statOsp[i], &lv_font_montserrat_18, C_OSPITE, LV_TEXT_ALIGN_RIGHT);
-        /* barra proporzionale */
+        /* proportional bar */
         const float a = atof(d.statCasa[i]), b = atof(d.statOsp[i]);
         const lv_coord_t wTot = WS;
         lv_coord_t wa = (a + b) > 0 ? (lv_coord_t)(wTot * a / (a + b)) : wTot / 2;
@@ -447,7 +447,7 @@ static void costruisciDettaglio()
 
     if (d.nCasa > 0 || d.nOsp > 0) {
         y += 8;
-        etichetta(s_detStat, 0, y, WS, "FORMAZIONI", &lv_font_montserrat_14, C_MUTED, LV_TEXT_ALIGN_LEFT);
+        etichetta(s_detStat, 0, y, WS, "LINE-UPS", &lv_font_montserrat_14, C_MUTED, LV_TEXT_ALIGN_LEFT);
         y += 22;
         const lv_coord_t colW = WS / 2 - 6;
         snprintf(buf, sizeof(buf), "%s  %s", d.casa, d.moduloCasa);
@@ -496,7 +496,7 @@ static void apriDettaglio(const char *id)
     if (s_detPag == nullptr || s_detCopia == nullptr) return;
     const uint8_t c = g_compVisibile < CALCIO_COMP_COUNT ? g_compVisibile : 0;
     if (dataLock(200)) {
-        /* intestazione provvisoria dalla lista, il resto arriva dal task calcio */
+        /* provisional heading from the list, the rest comes from the football task */
         const uint32_t ver = g_det->versione;
         memset(g_det, 0, sizeof(DettaglioPartita));
         g_det->versione = ver + 1;
@@ -533,7 +533,7 @@ void uiCalcioChiudiDettaglio()
     s_detVisibile = false;
     g_detAperto = false;
     if (s_detPag != nullptr) lv_obj_add_flag(s_detPag, LV_OBJ_FLAG_HIDDEN);
-    s_ver = 0xFFFFFFFF;          /* la lista va ridisegnata */
+    s_ver = 0xFFFFFFFF;          /* the list must be redrawn */
 }
 
 /* ---------------------------------------------------------------------------
@@ -559,13 +559,13 @@ void uiCalcioCreate(lv_obj_t *pg)
 
     creaClassifica(pg);
     lv_obj_add_flag(s_class, LV_OBJ_FLAG_HIDDEN);
-    creaDettaglio(pg);           /* per ultimo: sta sopra lista e classifica */
+    creaDettaglio(pg);           /* last: it sits above list and standings */
 }
 
 void uiCalcioUpdate(bool forza)
 {
     if (s_copia == nullptr) return;
-    if (s_detVisibile) {         /* scheda dettaglio aperta: si aggiorna solo quella */
+    if (s_detVisibile) {         /* detail card open: only that one is updated */
         aggiornaDettaglio(forza);
         return;
     }
@@ -595,16 +595,16 @@ void uiCalcioUpdate(bool forza)
 
     const Competizione &cp = *s_copia;
     char buf[96];
-    if (cp.ripiego && cp.n > 0) snprintf(buf, sizeof(buf), "%s  -  ultime partite", CALCIO_NOME[c]);
+    if (cp.ripiego && cp.n > 0) snprintf(buf, sizeof(buf), "%s  -  latest matches", CALCIO_NOME[c]);
     else                        snprintf(buf, sizeof(buf), "%s", CALCIO_NOME[c]);
     uiSetText(s_titolo, buf);
 
     if (cp.live > 0) {
-        snprintf(buf, sizeof(buf), "%u in corso  -  aggiornamento ogni %lu s", cp.live,
+        snprintf(buf, sizeof(buf), "%u in progress  -  updated every %lu s", cp.live,
                  (unsigned long)(CALCIO_LIVE_ATTIVO_MS / 1000));
         uiSetColor(s_info, C_RED);
     } else if (cp.caricata) {
-        snprintf(buf, sizeof(buf), "%u partite  -  da %d giorni fa a +%d", cp.n, CALCIO_GIORNI_PRIMA, CALCIO_GIORNI_DOPO);
+        snprintf(buf, sizeof(buf), "%u matches  -  from %d days ago to +%d", cp.n, CALCIO_GIORNI_PRIMA, CALCIO_GIORNI_DOPO);
         uiSetColor(s_info, C_MUTED);
     } else {
         buf[0] = 0;
@@ -623,11 +623,11 @@ void uiCalcioStato(char *out, size_t n)
         dataUnlock();
     }
     if (tot == 0) {
-        snprintf(out, n, "Dati ESPN  -  risultati in tempo reale: controllo ogni %lu s, ogni %lu s durante le partite",
+        snprintf(out, n, "ESPN data  -  real-time results: checked every %lu s, every %lu s during matches",
                  (unsigned long)(CALCIO_LIVE_IDLE_MS / 1000), (unsigned long)(CALCIO_LIVE_ATTIVO_MS / 1000));
         return;
     }
-    size_t o = snprintf(out, n, "IN CORSO: ");
+    size_t o = snprintf(out, n, "LIVE: ");
     for (uint8_t c = 0; c < CALCIO_COMP_COUNT && o < n; ++c) {
         if (live[c] == 0) continue;
         o += snprintf(out + o, n - o, "%s %u   ", CALCIO_TAB[c], live[c]);

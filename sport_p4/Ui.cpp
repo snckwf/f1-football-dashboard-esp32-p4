@@ -1,11 +1,11 @@
 /* ============================================================================
- *  Ui - intelaiatura: header, banner avvisi, barra schede, pagine
+ *  Ui - framework: header, alert banner, tab bar, pages
  * ========================================================================== */
 #include <time.h>
 
 #include "BoardLvgl.h"
 #include "Notify.h"
-#include "Impostazioni.h"
+#include "Settings.h"
 #include "Ui.h"
 
 static lv_obj_t *g_screen    = nullptr;
@@ -23,17 +23,17 @@ static lv_obj_t *g_subLbl[UI_SUB_MAX] = { nullptr };
 static lv_obj_t *g_pagineF1[UI_F1_PAGINE] = { nullptr };
 static lv_obj_t *g_paginaCal = nullptr;
 
-static uint8_t g_modo  = 1;      /* 0 = F1, 1 = calcio */
+static uint8_t g_modo  = 1;      /* 0 = F1, 1 = football */
 static uint8_t g_subF1 = 0;
 
 #if SHOW_TOUCH_DEBUG
 static lv_obj_t *g_lblTouch = nullptr;
 #endif
 
-static const char *const SUB_F1[UI_F1_PAGINE] = { "LIVE", "MAPPA", "PILOTI", "COSTRUTTORI", "ULTIMA GARA" };
+static const char *const SUB_F1[UI_F1_PAGINE] = { "LIVE", "MAP", "DRIVERS", "CONSTRUCTORS", "LAST RACE" };
 
 /* ---------------------------------------------------------------------------
- *  Helper condivisi
+ *  Shared helpers
  * ------------------------------------------------------------------------- */
 lv_obj_t *uiCard(lv_obj_t *parent, lv_coord_t x, lv_coord_t y, lv_coord_t w, lv_coord_t h)
 {
@@ -101,7 +101,7 @@ void uiSetColor(lv_obj_t *label, lv_color_t c)
 }
 
 /* ---------------------------------------------------------------------------
- *  Schede
+ *  Tabs
  * ------------------------------------------------------------------------- */
 static void stileBottone(lv_obj_t *b, lv_obj_t *l, bool attivo, lv_color_t accento)
 {
@@ -113,7 +113,7 @@ static void stileBottone(lv_obj_t *b, lv_obj_t *l, bool attivo, lv_color_t accen
 
 static void aggiornaIconaAudio();
 
-/* schede calcio: solo le competizioni attive (pagina web), nell'ordine di AppConfig */
+/* football tabs: only the active competitions (web page), in AppConfig order */
 static uint8_t g_tabComp[CALCIO_COMP_COUNT];
 static uint8_t g_nTab = 0;
 static uint8_t g_compAttiveViste = 0xFF;
@@ -204,7 +204,7 @@ static void subEventCb(lv_event_t *e)
     aggiornaPagina(true);
 }
 
-/* evidenzia in rosso le sezioni con qualcosa in diretta */
+/* highlights in red the sections with something live */
 static void aggiornaIndicatoriLive()
 {
     bool f1Live = false;
@@ -218,7 +218,7 @@ static void aggiornaIndicatoriLive()
     for (uint8_t c = 0; c < CALCIO_COMP_COUNT; ++c) if (live[c]) calLive = true;
 
     uiSetText(g_lblF1, f1Live ? "F1 " LV_SYMBOL_PLAY : "F1");
-    uiSetText(g_lblCal, calLive ? "CALCIO " LV_SYMBOL_PLAY : "CALCIO");
+    uiSetText(g_lblCal, calLive ? "FOOTBALL " LV_SYMBOL_PLAY : "FOOTBALL");
     if (g_modo != 0) lv_obj_set_style_border_color(g_btnF1, f1Live ? C_RED : C_BORDER, 0);
     if (g_modo != 1) lv_obj_set_style_border_color(g_btnCal, calLive ? C_RED : C_BORDER, 0);
 
@@ -234,7 +234,7 @@ static void aggiornaIndicatoriLive()
 }
 
 /* ---------------------------------------------------------------------------
- *  Header e banner
+ *  Header and banner
  * ------------------------------------------------------------------------- */
 static void aggiornaHeader()
 {
@@ -272,7 +272,7 @@ static void aggiornaBanner()
     lv_obj_set_style_text_font(g_lblBanner, &lv_font_montserrat_16, 0);
 }
 
-/* porta a una schermata: modo 0 = F1 (sub = scheda), 1 = calcio (sub = competizione) */
+/* goes to a screen: modo 0 = F1 (sub = tab), 1 = football (sub = competition) */
 static void vaiA(uint8_t modo, uint8_t sub)
 {
     if (modo == 0 && sub < UI_F1_PAGINE) {
@@ -296,8 +296,8 @@ static void tickCb(lv_timer_t *t)
 {
     (void)t;
 
-    /* standby: un avviso riaccende lo schermo e, se era spento, mostra la
-     * schermata dell'evento (se era acceso non cambio pagina sotto le dita) */
+    /* standby: an alert turns the screen back on and, if it was off, shows the
+     * screen of the event (if it was on I do not change page under your fingers) */
     bool forza = false;
     uint8_t modo, sub;
     if (notifyPrendiSveglia(&modo, &sub)) {
@@ -306,25 +306,25 @@ static void tickCb(lv_timer_t *t)
         if (eraSpento) {
             vaiA(modo, sub);
             forza = true;
-            Serial.printf("[SCHERMO] risveglio da avviso -> %s %u\n", modo == 0 ? "F1" : "calcio", sub);
+            Serial.printf("[SCREEN] wake-up from alert -> %s %u\n", modo == 0 ? "F1" : "football", sub);
         }
     }
 
-    /* a schermo spento non serve ridisegnare nulla */
+    /* with the screen off there is no need to redraw anything */
     static bool eraAcceso = true;
     const bool acceso = boardIsScreenOn();
     if (!acceso) {
-        if (eraAcceso) Serial.println("[SCHERMO] standby");
+        if (eraAcceso) Serial.println("[SCREEN] standby");
         eraAcceso = false;
         return;
     }
-    if (!eraAcceso) {                                      /* appena risvegliato */
-        Serial.println("[SCHERMO] acceso");
+    if (!eraAcceso) {                                      /* just woken up */
+        Serial.println("[SCREEN] on");
         eraAcceso = true;
         forza = true;
     }
 
-    /* impostazioni cambiate dalla pagina web */
+    /* settings changed from the web page */
     if (imp().compAttive != g_compAttiveViste) {
         uiCalcioChiudiDettaglio();
         aggiornaSchede();
@@ -339,7 +339,7 @@ static void tickCb(lv_timer_t *t)
 }
 
 /* ---------------------------------------------------------------------------
- *  Audio: icona, on/off, prova suoni
+ *  Audio: icon, on/off, sound test
  * ------------------------------------------------------------------------- */
 static void aggiornaIconaAudio()
 {
@@ -353,19 +353,19 @@ static void audioEventCb(lv_event_t *e)
     (void)e;
     notifySetSuoni(!notifySuoni());
     aggiornaIconaAudio();
-    notifica(NOT_INFO, SND_COUNT, notifySuoni() ? "Suoni degli avvisi ATTIVI"
-                                                : "Suoni degli avvisi DISATTIVATI (avvisi solo a schermo)");
+    notifica(NOT_INFO, SND_COUNT, notifySuoni() ? "Alert sounds ON"
+                                                : "Alert sounds OFF (on-screen alerts only)");
 }
 
 static void demoEventCb(lv_event_t *e)
 {
     (void)e;
-    notifica(NOT_INFO, SND_COUNT, "Prova suoni: partenza F1, passaggio, fischio d'inizio, gol, intervallo, fine partita");
+    notifica(NOT_INFO, SND_COUNT, "Sound test: F1 start, pass-by, kick-off whistle, goal, half time, full time");
     notifyDemoSuoni();
 }
 
 /* ---------------------------------------------------------------------------
- *  Costruzione
+ *  Build
  * ------------------------------------------------------------------------- */
 static lv_obj_t *fascia(lv_coord_t y, lv_coord_t h, lv_color_t bg)
 {
@@ -410,8 +410,8 @@ void uiCreate()
 
     /* ---- header ---- */
     lv_obj_t *hdr = fascia(0, UI_HEADER_H, C_CARD);
-    /* tocco sul titolo: prova di tutti i suoni */
-    lv_obj_t *tit = uiLabel(hdr, "SPORT  " LV_SYMBOL_PLAY "  F1 + CALCIO", &lv_font_montserrat_20, C_TEXT);
+    /* tap on the title: test all the sounds */
+    lv_obj_t *tit = uiLabel(hdr, "SPORT  " LV_SYMBOL_PLAY "  F1 + FOOTBALL", &lv_font_montserrat_20, C_TEXT);
     lv_obj_align(tit, LV_ALIGN_LEFT_MID, 12, 0);
     lv_obj_add_flag(tit, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_ext_click_area(tit, 12);
@@ -420,14 +420,14 @@ void uiCreate()
     g_lblOra = uiLabel(hdr, "--:--:--", &lv_font_montserrat_24, C_ORANGE);
     lv_obj_align(g_lblOra, LV_ALIGN_CENTER, 0, 0);
 
-    /* tocco sull'altoparlante: suoni degli avvisi on/off */
+    /* tap on the speaker: alert sounds on/off */
     g_lblAudio = uiLabel(hdr, "", &lv_font_montserrat_24, C_TEXT);
     lv_obj_align(g_lblAudio, LV_ALIGN_CENTER, 110, 0);
     lv_obj_add_flag(g_lblAudio, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_ext_click_area(g_lblAudio, 16);
     lv_obj_add_event_cb(g_lblAudio, audioEventCb, LV_EVENT_CLICKED, nullptr);
     aggiornaIconaAudio();
-    g_lblWifi = uiLabel(hdr, "avvio", &lv_font_montserrat_14, C_MUTED);
+    g_lblWifi = uiLabel(hdr, "starting", &lv_font_montserrat_14, C_MUTED);
     lv_obj_align(g_lblWifi, LV_ALIGN_RIGHT_MID, -12, 0);
 #if SHOW_TOUCH_DEBUG
     g_lblTouch = uiLabel(hdr, "", &lv_font_montserrat_14, C_PURPLE);
@@ -436,16 +436,16 @@ void uiCreate()
 
     /* ---- banner ---- */
     g_banner = fascia(UI_BANNER_Y, UI_BANNER_H, C_CARD);
-    g_lblBanner = uiLabel(g_banner, "Avvio...", &lv_font_montserrat_16, C_MUTED);
+    g_lblBanner = uiLabel(g_banner, "Starting...", &lv_font_montserrat_16, C_MUTED);
     lv_obj_set_width(g_lblBanner, UI_W - 24);
     lv_label_set_long_mode(g_lblBanner, LV_LABEL_LONG_MODE_DOTS);
     lv_obj_set_style_text_align(g_lblBanner, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_center(g_lblBanner);
 
-    /* ---- barra schede ---- */
+    /* ---- tab bar ---- */
     lv_obj_t *bar = fascia(UI_TABBAR_Y, UI_TABBAR_H, C_BG);
     g_btnF1  = bottone(bar, UI_MAIN_F1_X,  UI_MAIN_F1_W,  "F1",     &lv_font_montserrat_24, mainEventCb, 0, &g_lblF1);
-    g_btnCal = bottone(bar, UI_MAIN_CAL_X, UI_MAIN_CAL_W, "CALCIO", &lv_font_montserrat_22, mainEventCb, 1, &g_lblCal);
+    g_btnCal = bottone(bar, UI_MAIN_CAL_X, UI_MAIN_CAL_W, "FOOTBALL", &lv_font_montserrat_20, mainEventCb, 1, &g_lblCal);
     lv_obj_t *sep = uiBox(bar, UI_SUB_X0 - 8, 10, 2, UI_TAB_H - 8, C_BORDER);
     (void)sep;
     for (uint8_t i = 0; i < UI_SUB_MAX; ++i) {
@@ -453,7 +453,7 @@ void uiCreate()
                            &lv_font_montserrat_16, subEventCb, i, &g_subLbl[i]);
     }
 
-    /* ---- pagine ---- */
+    /* ---- pages ---- */
     for (uint8_t i = 0; i <= UI_F1_PAGINE; ++i) {
         lv_obj_t *p = fascia(UI_CONTENT_Y, UI_CONTENT_H, C_BG);
         lv_obj_add_flag(p, LV_OBJ_FLAG_HIDDEN);

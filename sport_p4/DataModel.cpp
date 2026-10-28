@@ -20,7 +20,7 @@ volatile uint8_t g_compVisibile   = 0;
 volatile bool    g_richiestaLista = false;
 
 static SemaphoreHandle_t g_dataMutex = nullptr;
-static char g_wifiStatus[80] = "avvio";
+static char g_wifiStatus[80] = "starting";
 
 static void *allocaPsram(size_t bytes)
 {
@@ -38,7 +38,7 @@ void initDataModel()
     g_trk    = static_cast<Tracciato *>(allocaPsram(sizeof(Tracciato)));
     g_det    = static_cast<DettaglioPartita *>(allocaPsram(sizeof(DettaglioPartita)));
     memset(&g_classSerieA, 0, sizeof(g_classSerieA));
-    Serial.printf("[DATI] calcio %u B, f1 %u B, live %u B\n",
+    Serial.printf("[DATA] football %u B, f1 %u B, live %u B\n",
                   (unsigned)(sizeof(Competizione) * CALCIO_COMP_COUNT),
                   (unsigned)sizeof(F1Dati), (unsigned)sizeof(F1Live));
 }
@@ -64,7 +64,7 @@ const char *getWifiStatusText() { return g_wifiStatus; }
 /* ---------------------------------------------------------------------------
  *  UTF-8 -> ASCII
  * ------------------------------------------------------------------------- */
-/* Latin Extended-A, da U+0100 a U+017F: una lettera base per ogni codice */
+/* Latin Extended-A, from U+0100 to U+017F: one base letter for each code */
 static const char LATIN_EXT_A[] =
     "AaAaAa" "CcCcCcCc" "DdDd" "EeEeEeEeEe" "GgGgGgGg" "HhHh" "IiIiIiIiIi" "Ii" "Jj"
     "Kkk" "LlLlLlLlLl" "NnNnNnnNn" "OoOoOoOo" "RrRrRr" "SsSsSsSs" "TtTtTt"
@@ -146,9 +146,9 @@ void asciiFold(const char *in, char *out, size_t n)
 }
 
 /* ---------------------------------------------------------------------------
- *  Date e ore
+ *  Dates and times
  * ------------------------------------------------------------------------- */
-/* giorni dal 1970-01-01 (algoritmo di H. Hinnant) */
+/* days since 1970-01-01 (H. Hinnant's algorithm) */
 static int64_t giorniDaCivile(int y, unsigned m, unsigned d)
 {
     y -= m <= 2;
@@ -189,7 +189,7 @@ long parseOffset(const char *s)
 
 void fmtGiorno(time_t t, char *out, size_t n)
 {
-    static const char *const gg[7] = { "Dom", "Lun", "Mar", "Mer", "Gio", "Ven", "Sab" };
+    static const char *const gg[7] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
     struct tm lt;
     localtime_r(&t, &lt);
     snprintf(out, n, "%s %02d/%02d", gg[lt.tm_wday % 7], lt.tm_mday, lt.tm_mon + 1);
@@ -227,43 +227,16 @@ uint32_t tempoGiroMs(const char *s)
 }
 
 /* ---------------------------------------------------------------------------
- *  Nomi in italiano
+ *  Short display names
  * ------------------------------------------------------------------------- */
 struct Traduzione { const char *en; const char *it; };
 static const Traduzione NOMI[] = {
-    /* nazionali */
-    { "Italy", "Italia" }, { "Germany", "Germania" }, { "Spain", "Spagna" },
-    { "France", "Francia" }, { "England", "Inghilterra" }, { "Netherlands", "Olanda" },
-    { "Portugal", "Portogallo" }, { "Belgium", "Belgio" }, { "Switzerland", "Svizzera" },
-    { "Croatia", "Croazia" }, { "Denmark", "Danimarca" }, { "Norway", "Norvegia" },
-    { "Sweden", "Svezia" }, { "Poland", "Polonia" }, { "Scotland", "Scozia" },
-    { "Wales", "Galles" }, { "Republic of Ireland", "Irlanda" }, { "Ireland", "Irlanda" },
-    { "Northern Ireland", "Irlanda del Nord" }, { "Czechia", "Cechia" },
-    { "Czech Republic", "Cechia" }, { "Greece", "Grecia" }, { "Turkey", "Turchia" },
-    { "Turkiye", "Turchia" }, { "Hungary", "Ungheria" }, { "Ukraine", "Ucraina" },
-    { "Slovakia", "Slovacchia" }, { "Slovenia", "Slovenia" }, { "Romania", "Romania" },
-    { "Bulgaria", "Bulgaria" }, { "Finland", "Finlandia" }, { "Iceland", "Islanda" },
-    { "Albania", "Albania" }, { "Georgia", "Georgia" }, { "Armenia", "Armenia" },
-    { "Azerbaijan", "Azerbaigian" }, { "Lithuania", "Lituania" }, { "Latvia", "Lettonia" },
-    { "Estonia", "Estonia" }, { "Cyprus", "Cipro" }, { "Luxembourg", "Lussemburgo" },
-    { "North Macedonia", "Macedonia del Nord" }, { "Montenegro", "Montenegro" },
-    { "Bosnia-Herzegovina", "Bosnia" }, { "Bosnia and Herzegovina", "Bosnia" },
-    { "Faroe Islands", "Isole Faroe" }, { "Moldova", "Moldavia" }, { "Belarus", "Bielorussia" },
-    { "Russia", "Russia" }, { "Israel", "Israele" }, { "Kosovo", "Kosovo" },
-    { "Gibraltar", "Gibilterra" }, { "Liechtenstein", "Liechtenstein" }, { "Malta", "Malta" },
-    { "San Marino", "San Marino" }, { "Andorra", "Andorra" }, { "Kazakhstan", "Kazakistan" },
-    { "Brazil", "Brasile" }, { "Argentina", "Argentina" }, { "Uruguay", "Uruguay" },
-    { "Colombia", "Colombia" }, { "Mexico", "Messico" }, { "United States", "Stati Uniti" },
-    { "USA", "Stati Uniti" }, { "Canada", "Canada" }, { "Japan", "Giappone" },
-    { "South Korea", "Corea del Sud" }, { "Morocco", "Marocco" }, { "Senegal", "Senegal" },
-    { "Australia", "Australia" }, { "Saudi Arabia", "Arabia Saudita" }, { "Egypt", "Egitto" },
-    { "Ivory Coast", "Costa d'Avorio" }, { "Cote d'Ivoire", "Costa d'Avorio" },
-    { "South Africa", "Sudafrica" }, { "Tunisia", "Tunisia" }, { "Algeria", "Algeria" },
-    { "Ecuador", "Ecuador" }, { "Paraguay", "Paraguay" }, { "Peru", "Peru'" },
-    { "Chile", "Cile" }, { "New Zealand", "Nuova Zelanda" }, { "Iran", "Iran" },
-    { "Qatar", "Qatar" }, { "Ghana", "Ghana" }, { "Nigeria", "Nigeria" },
-    { "Cameroon", "Camerun" }, { "Jordan", "Giordania" }, { "Uzbekistan", "Uzbekistan" },
-    /* club con nomi ESPN in inglese */
+    /* national teams: shorter or more common names */
+    { "Republic of Ireland", "Ireland" }, { "Czech Republic", "Czechia" },
+    { "Turkiye", "Turkey" }, { "Bosnia-Herzegovina", "Bosnia" },
+    { "Bosnia and Herzegovina", "Bosnia" }, { "Cote d'Ivoire", "Ivory Coast" },
+    { "United States", "USA" },
+    /* clubs: ESPN names shortened */
     { "Inter Milan", "Inter" }, { "Internazionale", "Inter" }, { "AC Milan", "Milan" },
     { "AS Roma", "Roma" }, { "Hellas Verona", "Verona" }, { "Bayern Munich", "Bayern" },
     { "Atletico Madrid", "Atletico Madrid" }, { "Sporting CP", "Sporting" },
@@ -279,7 +252,7 @@ const char *nomeItaliano(const char *eng)
 }
 
 /* ---------------------------------------------------------------------------
- *  Colori dei team F1
+ *  F1 team colours
  * ------------------------------------------------------------------------- */
 uint32_t coloreTeam(const char *s)
 {
